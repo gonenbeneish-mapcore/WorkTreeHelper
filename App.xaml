@@ -1,0 +1,8 @@
+<Application x:Class="WorktreeHelper.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown"
+             ThemeMode="System">
+    <!-- ThemeMode="System": Fluent theme that follows the Windows light/dark setting
+         and switches live when the user changes it. -->
+</Application>
