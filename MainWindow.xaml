@@ -269,10 +269,16 @@
                         AutomationProperties.Name="Select folder"/>
                 <!-- Only there when a newer release exists; its tooltip names the version. -->
                 <Button Style="{StaticResource UpdateButton}" Click="Update_Click"
-                        Content="&#xE896;" ToolTip="{Binding UpdateTooltip}"
+                        Content="&#xE896;"
                         AutomationProperties.Name="Install the update"
                         IsEnabled="{Binding IsUpdating, Converter={x:Static local:BoolToVisibilityConverter.Not}}"
-                        Visibility="{Binding HasUpdate, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                        Visibility="{Binding HasUpdate, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                    <!-- A string tooltip is laid out on one line however long it is, and
+                         release notes are long. -->
+                    <Button.ToolTip>
+                        <TextBlock Text="{Binding UpdateTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
+                    </Button.ToolTip>
+                </Button>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh (F5)"
                         AutomationProperties.Name="Refresh"/>
@@ -388,9 +394,12 @@
                                     <!-- Only where the branch has an open pull request. -->
                                     <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
                                             Tag="{Binding PullRequest}" Content="PR"
-                                            ToolTip="{Binding PullRequestTooltip}"
                                             AutomationProperties.Name="Open the pull request"
-                                            Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                            Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Button.ToolTip>
+                                            <TextBlock Text="{Binding PullRequestTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
+                                        </Button.ToolTip>
+                                    </Button>
                                 </StackPanel>
                             </Grid>
                         </Border>
