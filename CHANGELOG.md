@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.3.0 — unreleased
+
+- **A pull request is a click away.** A worktree whose branch has an open pull request gets a
+  `PR` button at the end of its row, named and numbered in its tooltip, that opens it in the
+  browser. Read from the GitHub API over the repository's own remote, so it works for any
+  repository on github.com: public ones answer with nothing installed, private ones need a
+  token, which is looked for in `GH_TOKEN`/`GITHUB_TOKEN`, then the GitHub CLI if it happens to
+  be installed, then git's own credential helper — asked in a way that cannot raise a prompt.
+  Where none of that answers, no buttons appear and nothing is said.
+- **Two ways into Visual Studio.** With nothing already open, the `VS` button now asks which is
+  wanted: generate the solution with the script, or open the worktree as a folder for the
+  builds configured through CMake. An instance that already has the worktree open is still
+  simply brought forward, without asking. The button still appears only for worktrees carrying
+  the script.
+
+- **It updates itself.** On startup and once a day it asks GitHub for the latest release; if
+  that is newer than the copy running, a download button appears in the title bar after the
+  folder one, naming the version it offers and what the release says is new in it. Pressing it fetches the release, puts the new exe
+  where this one lives and restarts into it.
+  - Nothing is touched until the download has arrived and the exe inside it has been checked
+    to report the version the release claims, so a failed or interrupted update leaves the app
+    running exactly as it was.
+  - The running exe is renamed aside rather than overwritten — Windows allows the first and
+    refuses the second — and that copy is cleared away at the next start.
+  - A check that finds nothing says nothing: no release, no network and already-current all
+    look the same from the outside. Drafts and pre-releases are ignored.
+
 ## v1.2.0
 
 - **A Visual Studio button, for repositories that have a script to open one.** A worktree

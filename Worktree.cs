@@ -114,6 +114,32 @@ public sealed class Worktree : INotifyPropertyChanged
 
     private static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
 
+    private PullRequest? _pullRequest;
+
+    /// <summary>
+    /// The open pull request this worktree's branch has, if it has one. Filled in per refresh
+    /// from one query for the whole repository.
+    /// </summary>
+    public PullRequest? PullRequest
+    {
+        get => _pullRequest;
+        set
+        {
+            if (ReferenceEquals(_pullRequest, value)) return;
+            _pullRequest = value;
+            Raise(nameof(PullRequest));
+            Raise(nameof(HasPullRequest));
+            Raise(nameof(PullRequestTooltip));
+        }
+    }
+
+    public bool HasPullRequest => PullRequest is not null;
+
+    /// <summary>The pull request's number and title, and whether it is still a draft.</summary>
+    public string PullRequestTooltip => PullRequest is not { } pr
+        ? ""
+        : $"#{pr.Number}{(pr.IsDraft ? " (draft)" : "")}  {pr.Title}\nClick to open it in the browser";
+
     private bool _hasVisualStudio;
 
     /// <summary>

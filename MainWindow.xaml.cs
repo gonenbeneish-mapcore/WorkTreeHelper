@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -86,6 +87,53 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => Set(ref _isDragOver, value);
     }
 
+    private ReleaseInfo? _update;
+    /// <summary>
+    /// A release newer than this copy, found by the check that runs at startup and daily.
+    /// Null until one turns up, which is what keeps the button off the caption.
+    /// </summary>
+    public ReleaseInfo? Update
+    {
+        get => _update;
+        private set
+        {
+            if (!Set(ref _update, value)) return;
+            OnPropertyChanged(nameof(HasUpdate));
+            OnPropertyChanged(nameof(UpdateTooltip));
+        }
+    }
+    public bool HasUpdate => Update is not null;
+
+    /// <summary>
+    /// What the app calls itself and which version this is, for the icon it is shown on. The
+    /// update button carries the version on offer; this one says what is actually running.
+    /// </summary>
+    public string AppTooltip => $"{AppName} {UpdateService.Current}";
+
+    /// <summary>
+    /// What the button offers, named and numbered against what is running now, and what the
+    /// release says is new in it.
+    /// </summary>
+    public string UpdateTooltip
+    {
+        get
+        {
+            if (Update is not { } release) return "";
+
+            var text = $"{AppName} {release.Version} is available (this is {UpdateService.Current})";
+            if (release.Notes.Length > 0) text += $"\n\n{release.Notes}";
+            return text + "\n\nClick to install it and restart";
+        }
+    }
+
+    private bool _isUpdating;
+    /// <summary>An install is under way; the button stops accepting another press.</summary>
+    public bool IsUpdating
+    {
+        get => _isUpdating;
+        private set => Set(ref _isUpdating, value);
+    }
+
     private string _status = "";
     public string Status
     {
@@ -169,6 +217,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         IsPinned = _settings.Pinned;
 
+        // Whatever an earlier update renamed aside is of no further use.
+        UpdateService.CleanUpPreviousVersion();
+
+        _updateCheck.Tick += (_, _) => _ = CheckForUpdateAsync();
+        _updateCheck.Start();
+
         _statusReset.Tick += (_, _) =>
         {
             _statusReset.Stop();
@@ -181,6 +235,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var last = _settings.LastRepoPath;
             if (!string.IsNullOrEmpty(last) && Directory.Exists(last))
                 await SetRepoAsync(last);
+
+            // After the list, so a slow or unreachable GitHub delays nothing the user came for.
+            _ = CheckForUpdateAsync();
         };
         Activated += (_, _) =>
         {
@@ -192,7 +249,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
         Deactivated += (_, _) => _deactivatedUtc = DateTime.UtcNow;
 
-        _tray = new TrayIcon(AppName);
+        _tray = new TrayIcon(AppTooltip);
         _tray.Clicked += ToggleWindow;
         _tray.ContextMenuRequested += ShowTrayMenu;
 
@@ -387,8 +444,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             HasWorktrees = Worktrees.Count > 0;
             Rest(RepoPath);
             var count = $"{Worktrees.Count} worktree{(Worktrees.Count == 1 ? "" : "s")}";
-            _tray?.SetTooltip($"{AppName} — {RepoName}: {count}");
+            _tray?.SetTooltip($"{AppTooltip} — {RepoName}: {count}");
             await UpdateLaunchersAsync();
+            await UpdatePullRequestsAsync(cts.Token);
             AutoSize();
             await UpdateOpenStateAsync();
             await UpdateStatusesAsync(cts.Token);
@@ -452,6 +510,65 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static bool SamePath(Worktree a, Worktree b)
         => string.Equals(a.Path, b.Path, StringComparison.OrdinalIgnoreCase);
+
+    // ---- Updates ------------------------------------------------------------
+
+    /// <summary>How often the app looks again while it sits in the tray.</summary>
+    private readonly DispatcherTimer _updateCheck = new() { Interval = TimeSpan.FromDays(1) };
+
+    /// <summary>
+    /// Asks GitHub for the latest release. Says nothing when there is none, when there is no
+    /// network, or when this copy is already it: a background check is not worth a message.
+    /// </summary>
+    private async Task CheckForUpdateAsync()
+    {
+        if (IsUpdating) return;
+        Update = await UpdateService.CheckAsync();
+    }
+
+    private void Update_Click(object sender, RoutedEventArgs e) => _ = InstallUpdateAsync();
+
+    /// <summary>
+    /// Installs the waiting release over this copy and restarts into it.
+    /// </summary>
+    /// <remarks>
+    /// The download and the file swap both happen while the app is still whole, so a failure
+    /// at either step leaves it running and untouched. Only once the new exe is in place does
+    /// it let go of the tray icon and the single-instance mutex — the copy about to start
+    /// needs that mutex, or it would see this one and simply ask it to show itself.
+    /// </remarks>
+    private async Task InstallUpdateAsync()
+    {
+        if (Update is not { } release || IsUpdating) return;
+
+        IsUpdating = true;
+        try
+        {
+            Report($"Downloading {AppName} {release.Version}…");
+            var newExe = await UpdateService.DownloadAsync(release);
+
+            Report($"Installing {AppName} {release.Version}…");
+            UpdateService.Apply(newExe);
+
+            var target = Environment.ProcessPath!;
+            SavePlacement();
+            _exiting = true;
+            ReleaseTray();
+            SingleInstance.Release();
+
+            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _exiting = false;
+            Fail($"Could not install {AppName} {release.Version}: {ex.Message}");
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
 
     // ---- Tray ---------------------------------------------------------------
 
@@ -648,6 +765,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Attaches each worktree's open pull request, if its branch has one. One query answers
+    /// for the whole repository, so this costs the same whether there are two worktrees or ten.
+    /// </summary>
+    private async Task UpdatePullRequestsAsync(CancellationToken ct)
+    {
+        var targets = Worktrees.Where(w => w.Branch.Length > 0).ToList();
+        if (targets.Count == 0) return;
+
+        var open = await PullRequests.OpenByBranchAsync(RepoPath, ct);
+        if (ct.IsCancellationRequested) return;
+
+        foreach (var worktree in targets)
+            worktree.PullRequest = open.GetValueOrDefault(worktree.Branch);
+    }
+
+    /// <summary>
     /// Flags the worktrees that carry the Visual Studio script. Runs before the window is
     /// sized, since the button it governs takes width of its own.
     /// </summary>
@@ -835,7 +968,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     // Row context menu: the actions the buttons offer, plus the ones they cannot.
     private void MenuOpenCode_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenVsCode(wt.Path));
-    private void MenuOpenVisualStudio_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => _ = OpenVisualStudioAsync(wt.Path));
+    private void MenuOpenVisualStudio_Click(object sender, RoutedEventArgs e)
+        => WithWorktree(sender, wt => _ = OpenVisualStudioAsync(wt.Path, anchor: null));
     private void MenuOpenTerminal_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenTerminal, wt.Path, "terminal"));
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
     private void MenuCopyPath_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Path, "path"));
@@ -894,12 +1028,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private Task WatchForVisualStudioAsync(string folder)
         => WatchForWindowAsync(folder, w => w.IsOpenInVisualStudio, attempts: 60, TimeSpan.FromSeconds(10));
 
-    private void OpenVisualStudio_Click(object sender, RoutedEventArgs e)
+    private void OpenPullRequest_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as Button)?.Tag is string folder) _ = OpenVisualStudioAsync(folder);
+        if ((sender as Button)?.Tag is PullRequest pr) OpenPullRequest(pr);
     }
 
-    private async Task OpenVisualStudioAsync(string folder)
+    private void MenuOpenPullRequest_Click(object sender, RoutedEventArgs e)
+        => WithWorktree(sender, wt => { if (wt.PullRequest is { } pr) OpenPullRequest(pr); });
+
+    private void OpenPullRequest(PullRequest pr)
+    {
+        try
+        {
+            Launcher.OpenInBrowser(pr.Url);
+            Report($"Opened pull request #{pr.Number}");
+        }
+        catch (Exception ex)
+        {
+            Fail($"Could not open pull request #{pr.Number}: {ex.Message}");
+        }
+    }
+
+    private void OpenVisualStudio_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string folder } button) _ = OpenVisualStudioAsync(folder, button);
+    }
+
+    private async Task OpenVisualStudioAsync(string folder, FrameworkElement? anchor)
     {
         try
         {
@@ -910,6 +1065,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
             }
 
+            AskHowToOpenVisualStudio(folder, anchor);
+        }
+        catch (Exception ex)
+        {
+            Fail($"Could not open Visual Studio: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Offers the two ways into Visual Studio, because only the user knows which is wanted:
+    /// the script generates the Windows solution, while opening the folder is what the builds
+    /// configured through CMake are worked on.
+    /// </summary>
+    /// <remarks>
+    /// Only when nothing has it open already — an instance that is up is simply brought
+    /// forward, and asking then would be a question with one useful answer.
+    /// </remarks>
+    private void AskHowToOpenVisualStudio(string folder, FrameworkElement? anchor)
+    {
+        var menu = new ContextMenu();
+        if (anchor is not null)
+        {
+            menu.PlacementTarget = anchor;
+            menu.Placement = PlacementMode.Bottom;
+        }
+
+        menu.Items.Add(Choice(
+            $"Generate the solution and open it  ({Launcher.VisualStudioScript})",
+            "Runs the script, which generates the solution and opens it. This is the Windows build.",
+            () => RunVisualStudioScript(folder),
+            preferred: true));
+
+        menu.Items.Add(Choice(
+            "Open this folder in Visual Studio",
+            "Opens the worktree as a folder, for the builds configured through CMake.",
+            () => OpenFolderInVisualStudio(folder)));
+
+        menu.IsOpen = true;
+
+        static MenuItem Choice(string header, string explanation, Action run, bool preferred = false)
+        {
+            var item = new MenuItem { Header = header, ToolTip = explanation };
+            if (preferred) item.FontWeight = FontWeights.SemiBold;
+            item.Click += (_, _) => run();
+            return item;
+        }
+    }
+
+    private void RunVisualStudioScript(string folder)
+    {
+        try
+        {
             Launcher.OpenInVisualStudio(folder);
             // Not "opened": the script has minutes of work to do before the IDE appears.
             Report($"Running {Launcher.VisualStudioScript}: {folder}");
@@ -918,6 +1125,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             Fail($"Could not run {Launcher.VisualStudioScript}: {ex.Message}");
+        }
+    }
+
+    private void OpenFolderInVisualStudio(string folder)
+    {
+        try
+        {
+            Launcher.OpenFolderInVisualStudio(folder);
+            Report($"Opening in Visual Studio: {folder}");
+            _ = WatchForVisualStudioAsync(folder);
+        }
+        catch (Exception ex)
+        {
+            Fail($"Could not open Visual Studio: {ex.Message}");
         }
     }
 

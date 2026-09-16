@@ -60,6 +60,56 @@ public static class Launcher
         Start("powershell.exe", "-NoLogo", folder);
     }
 
+    /// <summary>
+    /// Opens the worktree folder itself in Visual Studio, which is how the builds driven from
+    /// CMake rather than from a generated solution are worked on.
+    /// </summary>
+    public static void OpenFolderInVisualStudio(string folder)
+    {
+        var devenv = FindVisualStudio()
+                     ?? throw new FileNotFoundException("Could not find Visual Studio on this machine.");
+        Start(devenv, Quote(folder), folder);
+    }
+
+    /// <summary>Asks the Visual Studio Installer where the newest installation is.</summary>
+    /// <remarks>
+    /// Through vswhere, which ships with the installer and is the supported way to find one.
+    /// Guessing at a path under Program Files finds only the edition guessed at.
+    /// </remarks>
+    private static string? FindVisualStudio()
+    {
+        var vswhere = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "Microsoft Visual Studio", "Installer", "vswhere.exe");
+        if (!File.Exists(vswhere)) return null;
+
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo(vswhere, "-latest -property installationPath")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (proc is null) return null;
+
+            var root = proc.StandardOutput.ReadLine()?.Trim();
+            proc.WaitForExit(10_000);
+            if (string.IsNullOrEmpty(root)) return null;
+
+            var devenv = Path.Combine(root, "Common7", "IDE", "devenv.exe");
+            return File.Exists(devenv) ? devenv : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Hands a URL to whatever the user browses with.</summary>
+    public static void OpenInBrowser(string url)
+        => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+
     public static void OpenInExplorer(string folder)
         => Start("explorer.exe", Quote(folder), folder);
 

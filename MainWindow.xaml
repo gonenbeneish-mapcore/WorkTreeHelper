@@ -44,6 +44,8 @@
             <MenuItem Header="Show in File Explorer" Click="MenuOpenExplorer_Click"/>
             <MenuItem Header="Open in Visual Studio" Click="MenuOpenVisualStudio_Click"
                       Visibility="{Binding HasVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+            <MenuItem Header="Open pull request" Click="MenuOpenPullRequest_Click"
+                      Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
             <Separator/>
             <MenuItem Header="Copy path" Click="MenuCopyPath_Click"/>
             <MenuItem Header="Copy branch name" Click="MenuCopyBranch_Click"/>
@@ -106,6 +108,11 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+<!-- An update waiting to be installed. Accent-tinted because it is the one control
+             here that appears on its own and wants noticing. -->
+        <Style x:Key="UpdateButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
         </Style>
         <!-- The window's own close button, since the system one went with the caption.
              Full caption height and red on hover, the way every other window behaves. -->
@@ -176,13 +183,21 @@
                 </Setter.Value>
             </Setter>
         </Style>
+<!-- Pull request button, on rows whose branch has one open. Lettered for the same
+             reason as the Visual Studio one: the icon font has nothing that reads as a pull
+             request, and two initials cannot be mistaken for anything else. -->
+        <Style x:Key="PrButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
         <!-- Visual Studio button. Lettering rather than a glyph: the icon font has nothing
              that reads as Visual Studio, and two initials are unmistakable. -->
         <Style x:Key="VsButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="ToolTip" Value="Generate and open the Visual Studio solution (CreateVS-2026.bat)"/>
+            <Setter Property="ToolTip" Value="Open this worktree in Visual Studio"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsOpenInVisualStudio}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
@@ -228,8 +243,11 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
+            <!-- The icon is where you look to ask what this is and which version of it. -->
             <Image Grid.Column="0" Width="16" Height="16" Margin="8,0,8,0" VerticalAlignment="Center"
-                   Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                   Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"
+                   ToolTip="{Binding AppTooltip}"
+                   shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
             <!-- The path itself is the title. Clicking it opens the box below to type in,
                  which is the only way to name a folder through a symbolic link. -->
@@ -249,6 +267,12 @@
                 <Button Style="{StaticResource RowButton}" Click="SelectFolder_Click"
                         Content="&#xE838;" ToolTip="Select a folder inside a git repository (Ctrl+O)"
                         AutomationProperties.Name="Select folder"/>
+                <!-- Only there when a newer release exists; its tooltip names the version. -->
+                <Button Style="{StaticResource UpdateButton}" Click="Update_Click"
+                        Content="&#xE896;" ToolTip="{Binding UpdateTooltip}"
+                        AutomationProperties.Name="Install the update"
+                        IsEnabled="{Binding IsUpdating, Converter={x:Static local:BoolToVisibilityConverter.Not}}"
+                        Visibility="{Binding HasUpdate, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh (F5)"
                         AutomationProperties.Name="Refresh"/>
@@ -361,6 +385,12 @@
                                     <Button Style="{StaticResource VsButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
                                             Content="VS" AutomationProperties.Name="Open in Visual Studio"
                                             Visibility="{Binding HasVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                    <!-- Only where the branch has an open pull request. -->
+                                    <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
+                                            Tag="{Binding PullRequest}" Content="PR"
+                                            ToolTip="{Binding PullRequestTooltip}"
+                                            AutomationProperties.Name="Open the pull request"
+                                            Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
