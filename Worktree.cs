@@ -155,6 +155,7 @@ public sealed class Worktree : INotifyPropertyChanged
             if (_hasVisualStudio == value) return;
             _hasVisualStudio = value;
             Raise(nameof(HasVisualStudio));
+            Raise(nameof(ShowVisualStudioChooser));
         }
     }
 
@@ -176,22 +177,48 @@ public sealed class Worktree : INotifyPropertyChanged
         }
     }
 
-    private bool _isOpenInVisualStudio;
+    private bool _isSolutionOpen;
+    private bool _isFolderOpen;
 
     /// <summary>
-    /// A Visual Studio instance has this worktree's solution open, so its button focuses that
-    /// window instead of generating the solution again.
+    /// An instance has this worktree's generated solution open, so the solution button focuses
+    /// that window instead of generating it again.
     /// </summary>
-    public bool IsOpenInVisualStudio
+    public bool IsSolutionOpen
     {
-        get => _isOpenInVisualStudio;
+        get => _isSolutionOpen;
         set
         {
-            if (_isOpenInVisualStudio == value) return;
-            _isOpenInVisualStudio = value;
+            if (_isSolutionOpen == value) return;
+            _isSolutionOpen = value;
+            Raise(nameof(IsSolutionOpen));
             Raise(nameof(IsOpenInVisualStudio));
+            Raise(nameof(ShowVisualStudioChooser));
         }
     }
+
+    /// <summary>An instance has this worktree open as a folder — the CMake-configured builds.</summary>
+    public bool IsFolderOpen
+    {
+        get => _isFolderOpen;
+        set
+        {
+            if (_isFolderOpen == value) return;
+            _isFolderOpen = value;
+            Raise(nameof(IsFolderOpen));
+            Raise(nameof(IsOpenInVisualStudio));
+            Raise(nameof(ShowVisualStudioChooser));
+        }
+    }
+
+    /// <summary>
+    /// Either way is open, which is what splits one button into two: until something is open
+    /// there is a choice to offer, and afterwards each mode has a button of its own.
+    /// </summary>
+    public bool IsOpenInVisualStudio => IsSolutionOpen || IsFolderOpen;
+
+    /// <summary>The single button that asks which way in, shown only while neither is open.</summary>
+    public bool ShowVisualStudioChooser => HasVisualStudio && !IsOpenInVisualStudio;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

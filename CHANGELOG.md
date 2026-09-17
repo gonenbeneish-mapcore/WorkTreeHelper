@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.4.0
+
+- **Two Visual Studio instances on one worktree.** While nothing is open the `VS` button asks
+  which way in; once something is open it becomes one button per way — the open one tints and
+  focuses its window, the other starts the second instance without asking again. Previously the
+  first instance was focused and the second could not be started from the app at all.
+  - The two are told apart by what Visual Studio says it has open: a solution instance names
+    the solution file, a folder instance names the folder. Measured on 18.0, so no window
+    titles, which a custom title template can strip the folder's name out of.
+  - The folder button carries a folder with `VS` written inside it.
+  - A folder launch no longer polls for ten minutes waiting on a flag that could not tell the
+    two modes apart.
+- **Taskbar or tray, asked once.** The first run offers a taskbar button as well as the tray
+  icon; the answer is remembered and can be changed from **Show in taskbar** on the tray menu.
+  Off means tray-only, as before. With it on, the window's taskbar button can be right-clicked
+  and pinned, which is how a tray app gets pinned at all — and it takes an Alt+Tab entry and
+  can be minimised.
+- The window title is the repository's name rather than its full path, since that is now a
+  taskbar button's label.
+
 ## v1.3.0 — unreleased
 
 - **A pull request is a click away.** A worktree whose branch has an open pull request gets a

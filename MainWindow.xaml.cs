@@ -134,6 +134,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => Set(ref _isUpdating, value);
     }
 
+    private bool _showTaskbarQuestion;
+    /// <summary>
+    /// Whether the one-time taskbar-or-tray bar is up. Asked in the window rather than in a
+    /// dialog: the window is already on screen at first run, and a modal would be the only one
+    /// in the app and the only thing needing its own caption.
+    /// </summary>
+    public bool ShowTaskbarQuestion
+    {
+        get => _showTaskbarQuestion;
+        private set => Set(ref _showTaskbarQuestion, value);
+    }
+
     private string _status = "";
     public string Status
     {
@@ -199,9 +211,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     public string CaptionText => Status.Length == 0 ? AppName : Status;
 
-    /// <summary>The window's own title. Nothing draws it — the caption is ours — but the
-    /// shell still reads it.</summary>
-    public string WindowTitle => HasRepo ? $"{AppName}  —  {RepoPath}" : AppName;
+    /// <summary>
+    /// The window's own title. The caption is drawn by the app, but this is what the shell
+    /// shows — including on the taskbar button, when that is switched on — so it carries the
+    /// repository's name rather than its whole path.
+    /// </summary>
+    public string WindowTitle => HasRepo ? $"{AppName}  —  {RepoName}" : AppName;
 
     private const string AppName = "Worktree Helper";
 
@@ -216,6 +231,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => EditPath()), Key.L, ModifierKeys.Control));
 
         IsPinned = _settings.Pinned;
+        // Before the handle exists, which is the one place setting this costs nothing: WPF then
+        // simply creates the window with the taskbar style it is going to keep.
+        ShowInTaskbar = _settings.ShowInTaskbar;
+        ShowTaskbarQuestion = !_settings.AskedAboutTaskbar;
 
         // Whatever an earlier update renamed aside is of no further use.
         UpdateService.CleanUpPreviousVersion();
@@ -301,6 +320,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void SelectFolder_Click(object sender, RoutedEventArgs e) => SelectFolder();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ChooseTaskbar_Click(object sender, RoutedEventArgs e) => AnswerTaskbarQuestion(true);
+
+    private void ChooseTrayOnly_Click(object sender, RoutedEventArgs e) => AnswerTaskbarQuestion(false);
+
+    private void AnswerTaskbarQuestion(bool taskbar)
+    {
+        _settings.AskedAboutTaskbar = true;
+        ShowTaskbarQuestion = false;
+        ApplyShowInTaskbar(taskbar);
+
+        // The bar is gone, so the window is taller than its contents; nothing else would
+        // notice until the next refresh.
+        AutoSize();
+    }
+
+    private void TrayShowInTaskbar_Click(object sender, RoutedEventArgs e)
+    {
+        // WPF has already flipped IsChecked to what was asked for by the time this runs.
+        var wanted = (sender as MenuItem)?.IsChecked ?? ShowInTaskbar;
+        ApplyShowInTaskbar(wanted);
+    }
+
+    /// <summary>
+    /// Switches the taskbar button on or off and remembers it.
+    /// </summary>
+    /// <remarks>
+    /// Safe to do while the window is up: on .NET 10 this only adds or removes WS_EX_APPWINDOW
+    /// and the hidden owner window, so the handle — and with it the caption colour, the rounded
+    /// corners and the hook that a second launch broadcasts to — survives. The DWM attributes
+    /// are re-applied anyway, being two idempotent calls the Activated handler already makes,
+    /// and Topmost is re-asserted because swapping the owner can disturb the Z-order.
+    /// </remarks>
+    private void ApplyShowInTaskbar(bool wanted)
+    {
+        ShowInTaskbar = wanted;
+        _settings.ShowInTaskbar = wanted;
+        _settings.Save();
+
+        TitleBar.Match(this);
+        TitleBar.Round(this);
+        Topmost = true;
+        Topmost = IsPinned;
+
+        Report(wanted
+            ? "Showing in the taskbar. Right-click its button to pin it."
+            : "In the system tray only.");
+    }
 
     /// <summary>Moves the window, since the caption is drawn by the app.</summary>
     private void Caption_MouseDown(object sender, MouseButtonEventArgs e)
@@ -665,9 +732,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (menu.Items[i] is FrameworkElement { Tag: Worktree or TrayWorktreeMarker })
                 menu.Items.RemoveAt(i);
 
+        // The tick can be made stale by anything that edits the settings file, so it is read
+        // afresh rather than left where it was last put.
+        if (FindTrayItem(menu, TrayTaskbarTag) is { } taskbar) taskbar.IsChecked = ShowInTaskbar;
+
         if (Worktrees.Count == 0) return;
 
-        var at = 1; // straight below "Show Worktree Helper"
+        // Straight below "Show Worktree Helper", found rather than assumed: a fixed index here
+        // is a trap for whoever adds the next permanent item.
+        var at = menu.Items.IndexOf(FindTrayItem(menu, TrayShowTag)) + 1;
+        if (at <= 0) at = 1;
         foreach (var wt in Worktrees)
         {
             var item = new MenuItem
@@ -683,6 +757,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         menu.Items.Insert(at, new Separator { Tag = TrayWorktreeMarker.Instance });
     }
+
+    // Tags identifying the tray menu's permanent items. Anything whose Tag is neither a
+    // Worktree nor TrayWorktreeMarker survives PopulateTrayMenu's sweep, which is what keeps
+    // these in place; the values are what the markup sets.
+    private const string TrayShowTag = "tray.show";
+    private const string TrayTaskbarTag = "tray.taskbar";
+
+    private static MenuItem? FindTrayItem(ContextMenu menu, string tag)
+        => menu.Items.OfType<MenuItem>().FirstOrDefault(i => (i.Tag as string) == tag);
 
     /// <summary>Marks the separator that PopulateTrayMenu adds, so it can take it away again.</summary>
     private sealed class TrayWorktreeMarker
@@ -744,18 +827,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var flags = await Task.Run(() =>
                 {
                     var codeNames = VsCodeWindows.OpenFolderNames();
-                    var solutions = VisualStudioInstances.OpenSolutions();
+                    var studio = VisualStudioInstances.Open();
                     return targets
                         .Select(w => (
                             Code: codeNames.Contains(w.Name),
-                            Studio: solutions.Any(s => LinkPaths.IsUnder(s, w.Path))))
+                            Solution: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Solution),
+                            Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder)))
                         .ToArray();
                 });
 
                 for (var i = 0; i < targets.Count; i++)
                 {
                     targets[i].IsOpenInVsCode = flags[i].Code;
-                    targets[i].IsOpenInVisualStudio = flags[i].Studio;
+                    targets[i].IsSolutionOpen = flags[i].Solution;
+                    targets[i].IsFolderOpen = flags[i].Folder;
                 }
             }
             while (_openStateStale);
@@ -969,7 +1054,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Row context menu: the actions the buttons offer, plus the ones they cannot.
     private void MenuOpenCode_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenVsCode(wt.Path));
     private void MenuOpenVisualStudio_Click(object sender, RoutedEventArgs e)
-        => WithWorktree(sender, wt => _ = OpenVisualStudioAsync(wt.Path, anchor: null));
+        => WithWorktree(sender, wt => AskHowToOpenVisualStudio(wt.Path, anchor: null));
     private void MenuOpenTerminal_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenTerminal, wt.Path, "terminal"));
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
     private void MenuCopyPath_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Path, "path"));
@@ -1025,8 +1110,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// The Visual Studio script generates the solution before the IDE appears, which takes
     /// minutes and can stop for input, so this looks less often and for far longer.
     /// </summary>
-    private Task WatchForVisualStudioAsync(string folder)
-        => WatchForWindowAsync(folder, w => w.IsOpenInVisualStudio, attempts: 60, TimeSpan.FromSeconds(10));
+    private Task WatchForSolutionAsync(string folder)
+        => WatchForWindowAsync(folder, w => w.IsSolutionOpen, attempts: 60, TimeSpan.FromSeconds(10));
+
+    /// <summary>Opening a folder needs no generating, so the window arrives in seconds.</summary>
+    private Task WatchForFolderAsync(string folder)
+        => WatchForWindowAsync(folder, w => w.IsFolderOpen, attempts: 20, TimeSpan.FromSeconds(3));
 
     private void OpenPullRequest_Click(object sender, RoutedEventArgs e)
     {
@@ -1049,23 +1138,48 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    /// <summary>The button shown while nothing has the worktree open: it asks which way in.</summary>
     private void OpenVisualStudio_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string folder } button) _ = OpenVisualStudioAsync(folder, button);
+        if (sender is Button { Tag: string folder } button) AskHowToOpenVisualStudio(folder, button);
     }
 
-    private async Task OpenVisualStudioAsync(string folder, FrameworkElement? anchor)
+    /// <summary>The solution button, shown once either mode is open.</summary>
+    private void SolutionVisualStudio_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is string folder) _ = ReachVisualStudioAsync(folder, VisualStudioMode.Solution);
+    }
+
+    /// <summary>The folder button, shown once either mode is open.</summary>
+    private void FolderVisualStudio_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is string folder) _ = ReachVisualStudioAsync(folder, VisualStudioMode.Folder);
+    }
+
+    /// <summary>
+    /// Focuses the instance that has this worktree open the given way, or starts one if none
+    /// has. No menu either way: each button stands for one mode, so there is nothing to ask.
+    /// </summary>
+    /// <remarks>
+    /// The lookup is done afresh rather than read from the flags the refresh left behind: those
+    /// can be a minute old, and an instance can close between a refresh and a click.
+    /// </remarks>
+    private async Task ReachVisualStudioAsync(string folder, VisualStudioMode mode)
     {
         try
         {
-            // Off the UI thread: this is a COM call into an application that may be mid-build.
-            if (await Task.Run(() => VisualStudioInstances.TryFocus(folder)))
+            // Off the UI thread: a COM call into an application that may be mid-build.
+            var open = await Task.Run(() => VisualStudioInstances.Holding(folder, mode));
+
+            if (open is not null)
             {
-                Report($"Focused Visual Studio: {folder}");
+                if (VisualStudioInstances.Focus(open)) Report($"Focused Visual Studio: {open.Label}");
+                else Fail($"Could not focus {open.Label}; that window may have closed.");
                 return;
             }
 
-            AskHowToOpenVisualStudio(folder, anchor);
+            if (mode == VisualStudioMode.Solution) RunVisualStudioScript(folder);
+            else OpenFolderInVisualStudio(folder);
         }
         catch (Exception ex)
         {
@@ -1079,8 +1193,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// configured through CMake are worked on.
     /// </summary>
     /// <remarks>
-    /// Only when nothing has it open already — an instance that is up is simply brought
-    /// forward, and asking then would be a question with one useful answer.
+    /// Only while nothing has it open. Once something does, each mode gets a button of its own
+    /// — one to focus what is running, one to start the other way — because two instances on
+    /// one worktree is a supported way to work, and a menu that asked again every time would
+    /// stand between the user and the second one.
     /// </remarks>
     private void AskHowToOpenVisualStudio(string folder, FrameworkElement? anchor)
     {
@@ -1120,7 +1236,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Launcher.OpenInVisualStudio(folder);
             // Not "opened": the script has minutes of work to do before the IDE appears.
             Report($"Running {Launcher.VisualStudioScript}: {folder}");
-            _ = WatchForVisualStudioAsync(folder);
+            _ = WatchForSolutionAsync(folder);
         }
         catch (Exception ex)
         {
@@ -1134,7 +1250,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Launcher.OpenFolderInVisualStudio(folder);
             Report($"Opening in Visual Studio: {folder}");
-            _ = WatchForVisualStudioAsync(folder);
+            _ = WatchForFolderAsync(folder);
         }
         catch (Exception ex)
         {

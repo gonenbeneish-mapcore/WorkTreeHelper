@@ -31,8 +31,12 @@
              follows the Fluent light/dark theme like the rest of the app. The worktrees
              themselves are inserted below the first item on each open, by PopulateTrayMenu. -->
         <ContextMenu x:Key="TrayMenu">
-            <MenuItem Header="Show Worktree Helper" Click="TrayShow_Click" FontWeight="SemiBold"/>
+            <MenuItem Header="Show Worktree Helper" Click="TrayShow_Click" FontWeight="SemiBold"
+                      Tag="tray.show"/>
             <MenuItem Header="Refresh" Click="Refresh_Click"/>
+            <MenuItem Header="Show in taskbar" IsCheckable="True" Click="TrayShowInTaskbar_Click"
+                      Tag="tray.taskbar"
+                      ToolTip="Give the window a taskbar button and an Alt+Tab entry as well as the tray icon"/>
             <Separator/>
             <MenuItem Header="Exit" Click="TrayExit_Click"/>
         </ContextMenu>
@@ -199,9 +203,20 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="ToolTip" Value="Open this worktree in Visual Studio"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsOpenInVisualStudio}" Value="True">
+                <DataTrigger Binding="{Binding IsSolutionOpen}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
-                    <Setter Property="ToolTip" Value="Already open in Visual Studio — click to focus that window"/>
+                    <Setter Property="ToolTip" Value="The solution is open in Visual Studio — click to focus that window"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+<!-- The same button for the folder mode. Its content is a folder with VS written inside
+             it, so it reads as "Visual Studio, the folder one" in the width of one button. -->
+        <Style x:Key="VsFolderButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
+            <Setter Property="ToolTip" Value="Open this worktree as a folder in Visual Studio"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsFolderOpen}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                    <Setter Property="ToolTip" Value="Open as a folder in Visual Studio — click to focus that window"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -223,6 +238,7 @@
 
     <Grid Grid.IsSharedSizeScope="True">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -303,7 +319,28 @@
 
         <!-- Worktree list. No column headers: with one line per row, "WORKTREE" over the
              names and "BRANCH" over the branches only said what the rows already show. -->
-        <ScrollViewer Grid.Row="2" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
+        <!-- Asked once, on the first run, and never again. The window is already on screen at
+             that point, so this costs no dialog. -->
+        <Border Grid.Row="2" Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                Visibility="{Binding ShowTaskbarQuestion, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"
+                           Text="Show in the taskbar too, or the system tray only?"/>
+                <Button Grid.Column="1" Content="Taskbar" Margin="8,0,0,0" Padding="10,3" FontSize="12"
+                        Click="ChooseTaskbar_Click"/>
+                <Button Grid.Column="2" Content="Tray only" Margin="6,0,0,0" Padding="10,3" FontSize="12"
+                        Click="ChooseTrayOnly_Click"/>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="3" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Worktrees}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:Worktree}">
@@ -388,9 +425,31 @@
                                             AutomationProperties.Name="Show this folder in File Explorer"/>
                                     <!-- Only for worktrees that carry the script, so nothing shows here
                                          for a repository that does not use one. -->
+                                    <!-- Until something is open there is a choice to make, so one button asks.
+                                         Afterwards it is replaced by one button per mode: the open one focuses
+                                         its window, the other starts the second instance without asking. -->
                                     <Button Style="{StaticResource VsButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
                                             Content="VS" AutomationProperties.Name="Open in Visual Studio"
-                                            Visibility="{Binding HasVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                            Visibility="{Binding ShowVisualStudioChooser, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                    <Button Style="{StaticResource VsButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
+                                            Content="VS" AutomationProperties.Name="The Visual Studio solution"
+                                            Visibility="{Binding IsOpenInVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                    <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
+                                            AutomationProperties.Name="This worktree as a folder in Visual Studio"
+                                            Visibility="{Binding IsOpenInVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Grid>
+                                            <!-- 16 rather than the 14 its neighbours use: the smallest that
+                                                 leaves the lettering legible while still reading as the same
+                                                 size as the Explorer folder beside it. -->
+                                            <TextBlock Text="&#xE8B7;" FontSize="16" HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                                            <!-- In the folder's body, which sits below the glyph's centre because
+                                                 of the tab along its top. -->
+                                            <TextBlock Text="VS" FontSize="6" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                       Margin="0,2.5,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Button>
                                     <!-- Only where the branch has an open pull request. -->
                                     <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
                                             Tag="{Binding PullRequest}" Content="PR"
@@ -411,7 +470,7 @@
         <!-- Failures. The caption carries the status line and truncates it, which loses the
              part of a git error that says what went wrong; this appears only when there is
              something to read, so it costs no space the rest of the time. -->
-        <Border Grid.Row="3" Margin="6,0,6,6" Padding="8,6" CornerRadius="6"
+        <Border Grid.Row="4" Margin="6,0,6,6" Padding="8,6" CornerRadius="6"
                 Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
                 BorderBrush="{DynamicResource SystemFillColorCriticalBrush}" BorderThickness="1"
                 Visibility="{Binding HasError, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
@@ -432,14 +491,14 @@
         </Border>
 
         <!-- Empty state -->
-        <TextBlock Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+        <TextBlock Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxWidth="420"
                    Text="Select a folder inside a git repository (or drop one here) to list its worktrees."
                    Visibility="{Binding ShowEmptyHint, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
 
         <!-- Drop target. Last child so it covers the rest, and hit-testing nothing so the
              drag still reaches the window underneath it. -->
-        <Grid Grid.Row="0" Grid.RowSpan="4" IsHitTestVisible="False"
+        <Grid Grid.Row="0" Grid.RowSpan="5" IsHitTestVisible="False"
               Visibility="{Binding IsDragOver, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
             <Border Opacity="0.12" Background="{DynamicResource AccentFillColorDefaultBrush}"/>
             <Border BorderThickness="2" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"/>

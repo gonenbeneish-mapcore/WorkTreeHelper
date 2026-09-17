@@ -10,9 +10,11 @@ namespace WorktreeHelper;
 /// </summary>
 /// <remarks>
 /// Window titles cannot answer this the way they do for VS Code: every worktree of a
-/// repository generates a solution of the same name, so they all produce the same caption.
-/// Visual Studio registers its automation object in the Running Object Table instead, and
-/// that object knows the solution's full path and the window to bring forward.
+/// repository generates a solution of the same name, so they all produce the same caption —
+/// and a custom title template can leave the folder's name out altogether. Visual Studio
+/// registers its automation object in the Running Object Table instead, and that object names
+/// what it has open: the solution file, or the folder. That one string carries both the
+/// worktree and the mode (see <see cref="VisualStudioInstance"/>).
 ///
 /// Two things it cannot see: an instance running elevated while this app is not, because the
 /// two integrity levels do not share a Running Object Table; and an instance too busy to
@@ -22,10 +24,10 @@ internal static class VisualStudioInstances
 {
     private const string DteMoniker = "VisualStudio.DTE";
 
-    /// <summary>The solution open in every instance that answers, and its main window.</summary>
-    public static List<(string Solution, IntPtr Hwnd)> Open()
+    /// <summary>Every running instance that names something it has open.</summary>
+    public static List<VisualStudioInstance> Open()
     {
-        var found = new List<(string, IntPtr)>();
+        var found = new List<VisualStudioInstance>();
 
         if (GetRunningObjectTable(0, out var table) != 0 || table is null) return found;
         if (CreateBindCtx(0, out var context) != 0 || context is null) return found;
@@ -56,7 +58,10 @@ internal static class VisualStudioInstances
                     if (Read(dte, "MainWindow") is { } window && Read(window, "HWnd") is { } handle)
                         hwnd = new IntPtr(Convert.ToInt64(handle));
 
-                    found.Add((path, hwnd));
+                    // Nothing can be done with an instance that has no window to raise.
+                    if (hwnd == IntPtr.Zero) continue;
+
+                    found.Add(new VisualStudioInstance(path, hwnd));
                 }
                 catch (COMException)
                 {
@@ -76,22 +81,22 @@ internal static class VisualStudioInstances
         return found;
     }
 
-    /// <summary>Solution paths only, for deciding which rows to mark.</summary>
-    public static List<string> OpenSolutions() => Open().Select(i => i.Solution).ToList();
+    /// <summary>The instances that have <paramref name="worktree"/> open, in either mode.</summary>
+    public static List<VisualStudioInstance> Holding(string worktree)
+        => Open().Where(i => i.Holds(worktree)).ToList();
 
-    /// <summary>Brings the instance holding <paramref name="worktree"/>'s solution to the front.</summary>
-    /// <returns>False if no instance has it open — the caller should generate and launch instead.</returns>
-    public static bool TryFocus(string worktree)
+    /// <summary>The instance that has <paramref name="worktree"/> open the given way, if any.</summary>
+    public static VisualStudioInstance? Holding(string worktree, VisualStudioMode mode)
+        => Holding(worktree).FirstOrDefault(i => i.Mode == mode);
+
+    /// <summary>Brings one instance to the front.</summary>
+    /// <returns>False if its window has gone since it was found.</returns>
+    public static bool Focus(VisualStudioInstance instance)
     {
-        foreach (var (solution, hwnd) in Open())
-        {
-            if (hwnd == IntPtr.Zero || !LinkPaths.IsUnder(solution, worktree)) continue;
-            if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
-            // Allowed to steal focus here: we are the foreground process, having just been
-            // clicked.
-            return SetForegroundWindow(hwnd);
-        }
-        return false;
+        if (instance.Hwnd == IntPtr.Zero) return false;
+        if (IsIconic(instance.Hwnd)) ShowWindow(instance.Hwnd, SW_RESTORE);
+        // Allowed to steal focus here: we are the foreground process, having just been clicked.
+        return SetForegroundWindow(instance.Hwnd);
     }
 
     private static object? Read(object target, string property)

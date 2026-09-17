@@ -20,6 +20,7 @@ upstream. A quiet row means there is nothing waiting in it.
 - **Sizes itself** to the list after every load, capped to the monitor's work area, and parks in
   the corner by the notification area until you move it — then it remembers where you put it.
 - **One instance.** Launching it again shows the copy already in the tray.
+- **Taskbar or tray.** Asked once on the first run, changeable afterwards from the tray menu.
 - **Updates itself.** See [Updating](#updating).
 - WPF on .NET 10 with the Fluent theme, following the Windows light/dark setting live, and
   Per-Monitor V2 DPI aware. Built for Windows 11; on Windows 10 the title-bar colour and
@@ -62,6 +63,16 @@ release, no network, already current — says nothing.
 Updating needs write access to wherever the exe sits, so a copy under `Program Files` will
 report that it cannot install and needs replacing by hand.
 
+## Taskbar or tray
+
+The first run asks whether to take a taskbar button as well as the tray icon. Either answer is
+remembered, and **Show in taskbar** on the tray menu changes it at any time — it applies
+immediately, without a restart.
+
+Tray-only is the default and how the app is meant to live. With the taskbar button on, the window
+also takes an Alt+Tab entry and can be minimised, and its button can be right-clicked and pinned
+— which is the way to pin a tray-resident app to the taskbar.
+
 ## Use
 
 1. Point it at a repository: the **folder** button in the title bar (`Ctrl+O`), or drop a
@@ -73,7 +84,8 @@ report that it cannot install and needs replacing by hand.
      it focuses rather than launches. Double-clicking the row does the same thing.
    - **terminal** — Windows Terminal (`wt -d`), falling back to PowerShell.
    - **folder** — File Explorer.
-   - **`VS`** — only for repositories that carry a Visual Studio script; see below.
+   - **`VS`** — only for repositories that carry a Visual Studio script; see below. Once
+     something is open there are two: the solution, and a folder marked `VS` for the other way in.
    - **`PR`** — only when that branch has an open pull request; opens it in the browser.
 3. **Right-click a row** for the same actions plus **Copy path** and **Copy branch name**.
    Hovering a row shows its full path; hovering the drift counts spells them out in words and
@@ -117,7 +129,7 @@ This one is opt-in by convention rather than configuration: a worktree whose roo
 **`CreateVS-2026.bat`** gets a `VS` button. Repositories without such a script show nothing
 there, which is why the rest of the app works anywhere.
 
-With nothing already open, pressing it asks which way in is wanted:
+While nothing has the worktree open, one button asks which way in is wanted:
 
 - **Generate the solution and open it** — runs the script, in a visible console, since it takes
   minutes, prints progress and can stop for input. Its working directory is the worktree, which
@@ -126,13 +138,16 @@ With nothing already open, pressing it asks which way in is wanted:
   builds configured through CMake. Visual Studio is located through `vswhere`, which ships with
   its installer, rather than by guessing at a path.
 
-Once an instance has that worktree's solution open the button tints and focuses it instead,
-without asking. That is read from the **Running Object Table** rather than window titles: every
-worktree of a repository generates a solution of the same name, so the captions are identical,
-while the automation object knows the solution's real path. Two things it cannot see: an
-instance running elevated while this app is not, since the two do not share a Running Object
-Table; and — untested — an instance that was opened on a *folder* rather than a solution, which
-may report no solution path to match against.
+Once either way is open, that single button is replaced by one per way: the open one tints and
+focuses its window, the other starts the second instance with no further asking. Two instances
+on one worktree — the Windows solution and the folder — is a supported way to work.
+
+Which is which comes from the **Running Object Table** rather than window titles: every worktree
+generates a solution of the same name, so the captions are identical, and a custom title template
+can leave the folder's name out entirely. The automation object instead names what it has open —
+`…\mapcore2\VS\MapCore.slnx` for a solution, `…\mapcore2` for a folder — which carries both the
+worktree and the mode. An instance running elevated while this app is not cannot be seen, since
+the two do not share a Running Object Table.
 
 ## The pull request button
 
@@ -168,6 +183,7 @@ no buttons appear. A public repository needs none of it.
 | `Launcher.cs` | Opens VS Code / terminal / Explorer / the Visual Studio script |
 | `VsCodeWindows.cs` | Finds and focuses the VS Code window that has a worktree open |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |
+| `VisualStudioInstance.cs` | One instance: what it has open, and which of the two ways |
 | `PullRequests.cs` | The open pull requests of the repository, by branch |
 | `UpdateService.cs` | Finds a newer GitHub release, and installs it over this copy |
 | `MonitorWorkArea.cs` | Work area of the monitor the window is on, for the auto-size cap |
