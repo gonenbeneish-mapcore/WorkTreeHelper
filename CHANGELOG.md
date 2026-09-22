@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.2 — unreleased
+
+- The taskbar and the notification area are now one home or the other: choosing the taskbar
+  takes the tray icon away, and closing the window exits the app rather than hiding it.
+- Escape minimises instead of closing when the app lives in the taskbar.
+- The app’s menu is on the window as well — the title-bar icon, a right-click on the title
+  bar, or the context-menu key — since in the taskbar there is no icon to right-click.
+- The README leads with what the app is for and how to use it, in plain words.
+
 ## v1.4.1
 
 - The taskbar button minimises the window and restores it; it had no minimize box, so the

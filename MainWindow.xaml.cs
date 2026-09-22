@@ -264,6 +264,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     public string WindowTitle => HasRepo ? $"{AppName}  —  {RepoName}" : AppName;
 
+    /// <summary>
+    /// What the close button promises, which depends on where the app is living: in the
+    /// taskbar the window is the app and closing it exits.
+    /// </summary>
+    public string CloseHint => ShowInTaskbar
+        ? "Close and exit the app (Alt+F4). Esc minimises."
+        : "Close to the tray (Esc)";
+
     private const string AppName = "Worktree Helper";
 
     public MainWindow()
@@ -273,8 +281,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => _ = RefreshOrCommitAsync()), Key.F5, ModifierKeys.None));
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => SelectFolder()), Key.O, ModifierKeys.Control));
-        InputBindings.Add(new KeyBinding(new RelayCommand(_ => HideToTray()), Key.Escape, ModifierKeys.None));
+        InputBindings.Add(new KeyBinding(new RelayCommand(_ => DismissWindow()), Key.Escape, ModifierKeys.None));
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => EditPath()), Key.L, ModifierKeys.Control));
+        // The context-menu key, where every other window puts its menu.
+        InputBindings.Add(new KeyBinding(new RelayCommand(_ => ShowAppMenu(atPointer: false)), Key.Apps, ModifierKeys.None));
 
         IsPinned = _settings.Pinned;
         // Before the handle exists, which is the one place setting this costs nothing: WPF then
@@ -331,9 +341,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AnnounceUpdate();
         };
 
-        _tray = new TrayIcon(AppTooltip);
-        _tray.Clicked += ToggleWindow;
-        _tray.ContextMenuRequested += ShowTrayMenu;
+        // Only when the app lives there. A taskbar button and a notification-area icon are
+        // two answers to the same question — where this app is to be found — and having both
+        // put it in two places at once.
+        SetTrayIcon(!ShowInTaskbar);
 
         var app = Application.Current;
         // Windows is logging off or restarting. Without this the close below is cancelled
@@ -357,10 +368,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Closing += (_, e) =>
         {
             if (_exiting) return;
-            // The app lives in the tray: closing the window only hides it.
+
+            // With a taskbar button the window is the app, so closing it closes the app. In
+            // the notification area the icon is the app and the window is only ever put away
+            // — closing it there would leave no way to say so.
+            if (ShowInTaskbar)
+            {
+                SavePlacement();
+                _exiting = true;
+                return;
+            }
+
             e.Cancel = true;
             HideToTray();
         };
+
+        // The app shuts down explicitly (ShutdownMode), so that nothing closes it while it is
+        // living in the tray with no window open. The other side of that: once the window has
+        // genuinely closed, something has to say so.
+        Closed += (_, _) => Application.Current.Shutdown();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -425,14 +451,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _settings.ShowInTaskbar = wanted;
         _settings.Save();
 
+        SetTrayIcon(!wanted);
+        OnPropertyChanged(nameof(CloseHint));
+
         TitleBar.Match(this);
         TitleBar.Round(this);
         Topmost = true;
         Topmost = IsPinned;
 
         Report(wanted
-            ? "Showing in the taskbar. Right-click its button to pin it."
-            : "In the system tray only.");
+            ? "In the taskbar. Closing the window exits; right-click the caption for this menu."
+            : "In the system tray. Closing the window puts it away.");
     }
 
     /// <summary>Moves the window, since the caption is drawn by the app.</summary>
@@ -792,6 +821,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool WasInFront()
         => IsActive || DateTime.UtcNow - _deactivatedUtc < TimeSpan.FromMilliseconds(400);
 
+    /// <summary>
+    /// What Escape does: put the window away. That is the tray when the app lives there, and
+    /// the taskbar otherwise — a key this easy to hit should not be able to close the app.
+    /// </summary>
+    private void DismissWindow()
+    {
+        if (ShowInTaskbar) WindowState = WindowState.Minimized;
+        else HideToTray();
+    }
+
     private void HideToTray()
     {
         SavePlacement();
@@ -814,6 +853,47 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AnnounceUpdate();
     }
 
+    /// <summary>
+    /// The app’s own menu, opened from the window rather than from the notification area.
+    /// </summary>
+    /// <remarks>
+    /// In the taskbar there is no tray icon to right-click, and this is the only way to the
+    /// menu — including the item that hands the app back to the notification area. Three
+    /// ways in, because being unable to find it would strand someone in the taskbar: the
+    /// caption icon, which is where Windows has always kept a window’s menu; a right-click
+    /// anywhere on the caption; and the context-menu key.
+    /// </remarks>
+    private void ShowAppMenu(bool atPointer)
+    {
+        if (FindResource("TrayMenu") is not ContextMenu menu) return;
+
+        PopulateTrayMenu(menu);
+        // "Show Worktree Helper" is no use on a window that is already in front.
+        if (FindTrayItem(menu, TrayShowTag) is { } show) show.Visibility = Visibility.Collapsed;
+
+        // None of the notification-area placement: this menu has a target on screen, so it
+        // can simply open against it.
+        menu.BeginAnimation(OpacityProperty, null);
+        menu.Opacity = 1;
+        menu.HorizontalOffset = 0;
+        menu.VerticalOffset = 0;
+        menu.PlacementTarget = atPointer ? this : AppIcon;
+        menu.Placement = atPointer ? PlacementMode.MousePoint : PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void Caption_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        ShowAppMenu(atPointer: true);
+        e.Handled = true;
+    }
+
+    private void AppIcon_Click(object sender, MouseButtonEventArgs e)
+    {
+        ShowAppMenu(atPointer: false);
+        e.Handled = true;
+    }
+
     private int _trayAnchorX, _trayAnchorY;
 
     private void ShowTrayMenu(int screenX, int screenY)
@@ -821,6 +901,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (FindResource("TrayMenu") is not ContextMenu menu) return;
 
         PopulateTrayMenu(menu);
+        if (FindTrayItem(menu, TrayShowTag) is { } show) show.Visibility = Visibility.Visible;
 
         _trayAnchorX = screenX;
         _trayAnchorY = screenY;
@@ -920,6 +1001,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _exiting = true;
         ReleaseTray();
         Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Puts the notification-area icon up or takes it down, to match where the app is living.
+    /// </summary>
+    private void SetTrayIcon(bool wanted)
+    {
+        if (wanted == _tray is not null) return;
+
+        if (!wanted)
+        {
+            ReleaseTray();
+            return;
+        }
+
+        _tray = new TrayIcon(AppTooltip);
+        _tray.Clicked += ToggleWindow;
+        _tray.ContextMenuRequested += ShowTrayMenu;
     }
 
     private void ReleaseTray()

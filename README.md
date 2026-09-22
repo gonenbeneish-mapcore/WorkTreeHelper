@@ -1,44 +1,67 @@
 # Worktree Helper
 
-A small Windows tray app that lists the git worktrees of a repository and opens any of them
-in VS Code, a terminal, or File Explorer — and tells you at a glance which one you left work
-in.
+Every folder your project is checked out into, in one small window, with a button to open each
+one where you work.
 
-![The window listing three worktrees with their branches, uncommitted counts and per-row action buttons](docs/screenshot.png)
+![The window listing four worktrees of a project, each with its branch, what is uncommitted or unpushed in it, and its row of buttons](docs/screenshot.png)
 
-Each row is one worktree: its folder name, the branch it is on, and — only when there is
-something to say — a dot with the number of uncommitted paths and `↑`/`↓` counts against its
-upstream. A quiet row means there is nothing waiting in it.
+## What it is
 
-- **Lives in the tray.** Left-click toggles the window, right-click lists the worktrees so one
-  can be opened in VS Code without the window ever appearing. Closing the window (or `Esc`)
-  hides it; **Exit** on the tray menu quits.
-- **Knows what is already open.** The VS Code button is tinted for a worktree that already has
-  a window, and clicking focuses that window instead of opening a second one.
-- **Keeps the paths you gave it.** A folder reached through a symbolic link or junction has two
-  names, and git always reports the target; see [Symbolic links](#symbolic-links-and-junctions).
-- **Sizes itself** to the list after every load, capped to the monitor's work area, and parks in
-  the corner by the notification area until you move it — then it remembers where you put it.
-- **One instance.** Launching it again shows the copy already in the tray.
-- **Taskbar or tray.** Asked once on the first run, changeable afterwards from the tray menu.
-- **Updates itself.** See [Updating](#updating).
-- WPF on .NET 10 with the Fluent theme, following the Windows light/dark setting live, and
-  Per-Monitor V2 DPI aware. Built for Windows 11; on Windows 10 the title-bar colour and
-  rounded corners simply do not apply.
-- Hovering the app icon says which version this is.
-- Remembers the repository, the window position and the pin in
-  `%APPDATA%\WorktreeHelper\settings.json`.
+Git can have the same project checked out into several folders at once — typically one per
+branch, so you can leave one thing half-finished and pick up another without putting it away
+first. Those folders are called **worktrees**, and after a week or two it is easy to forget
+which ones you have and what you left in them.
+
+This lists them. One row each: the folder's name, the branch it is on, and — only when there is
+something to say — a dot with the number of files you have changed and `↑`/`↓` counts for
+commits not yet pushed or pulled. **A quiet row means nothing is waiting in it.**
+
+## Using it
+
+**Point it at your project.** Drag the folder onto the window, or press the folder button in the
+title bar. Any folder inside the project will do; it finds the rest by itself. It remembers,
+so this is a first-run thing.
+
+**Open one.** The buttons at the right of each row:
+
+![The end of one row: the changed-file count, the commits not yet pushed, then the VS Code, terminal, Explorer and pull-request buttons](docs/buttons.png)
+
+| Button | Opens |
+|---|---|
+| `{}` | **VS Code.** Double-clicking the row does the same. Highlighted when that folder is already open — then it brings that window forward rather than opening a second one. |
+| terminal | A **terminal** in that folder. |
+| folder | That folder in **File Explorer**. |
+| `VS` | **Visual Studio** — only appears for projects set up for it, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). |
+| `PR` | The open **pull request** for that branch, in your browser. Only on branches that have one. |
+
+**Right-click a row** for the same things plus **Copy path** and **Copy branch name**. Hovering a
+row shows its full path, and hovering the counts says what they mean in words. `F5` re-reads
+everything.
+
+## Where it lives
+
+The first run asks where you want it: the **taskbar** or the **system tray**. One or the other —
+and either answer can be changed later.
+
+| | System tray | Taskbar |
+|---|---|---|
+| Where to find it | Icon in the notification area | A taskbar button, and Alt+Tab |
+| Clicking it | Shows and hides the window | Minimises and restores the window |
+| Its menu | Right-click the icon: the worktrees, so one can be opened without the window appearing at all | Click the icon in the title bar, or right-click the title bar |
+| Closing the window | Puts it away; **Exit** on the menu quits | Quits the app. `Esc` minimises instead |
+
+To change your mind, open that menu and pick **Show in taskbar**. It applies straight away.
 
 ## Install
 
 Grab `WorkTreeHelper-V*.zip` from the releases and unzip `WorktreeHelper.exe` anywhere — there
-is no installer, and the app writes only the settings file above.
+is no installer, and the app writes only `%APPDATA%\WorktreeHelper\settings.json`.
 
 It needs:
 
 | Requirement | Why |
 |---|---|
-| **.NET 10 Desktop Runtime**, x64 | The exe is ~350 KB: it carries the app, not the runtime. The *Desktop* runtime, not the plain one — this is WPF. <https://dotnet.microsoft.com/download/dotnet/10.0> |
+| **.NET 10 Desktop Runtime**, x64 | The exe is ~400 KB: it carries the app, not the runtime. The *Desktop* runtime, not the plain one — this is WPF. <https://dotnet.microsoft.com/download/dotnet/10.0> |
 | **`git` on PATH** | Every listing is `git worktree list` / `git status` under the hood. |
 | Windows 10 or 11, x64 | Published `win-x64`. |
 
@@ -48,56 +71,28 @@ PowerShell. The exe is unsigned, so Windows shows a SmartScreen prompt the first
 
 ## Updating
 
-The app asks GitHub for the latest release when it starts, whenever you press **Refresh**, and
-once a day otherwise. When one is newer than the copy you are running, it says so: a notice
-slides under the title bar naming the version, with **Install** on it, and takes itself away
-after a few seconds — or stays as long as the pointer is on it. A release found while the
-window is in the tray is announced the next time you open it.
+It asks GitHub for the latest release at startup, whenever you press **Refresh**, and once a day
+otherwise. When there is a newer one it says so: a notice under the title bar naming the version,
+with **Install** on it, gone after a few seconds — and a button carrying that version stays at
+the front of the title bar. Either one fetches the release, puts the new exe where this one
+lives, and restarts into it.
 
-The notice leaves behind the button that does the work: first in the title bar, carrying the
-version it offers, and hovering it adds the version you have and the first few lines of that
-release's notes. Pressing either fetches the release, puts the new exe where this one lives,
-and restarts into it.
+Nothing is disturbed until the download has arrived and the exe inside it reports the version the
+release claims, so a failed or interrupted update leaves the app as it was; the copy it replaces
+is kept as `WorktreeHelper.exe.old` until the next start. Drafts and pre-releases are never
+offered, and a check that finds nothing says nothing. Updating needs write access to wherever the
+exe sits, so a copy under `Program Files` will report that it cannot install itself.
 
-Nothing is disturbed until the download has arrived and the exe inside it has been checked to
-report the version the release claims, so an interrupted or failed update leaves the app as it
-was. The copy it replaces is kept beside it as `WorktreeHelper.exe.old` and cleared away at the
-next start. Drafts and pre-releases are never offered, and a check that finds nothing — no
-release, no network, already current — says nothing.
+## Other things worth knowing
 
-Updating needs write access to wherever the exe sits, so a copy under `Program Files` will
-report that it cannot install and needs replacing by hand.
-
-## Taskbar or tray
-
-The first run asks whether to take a taskbar button as well as the tray icon. Either answer is
-remembered, and **Show in taskbar** on the tray menu changes it at any time — it applies
-immediately, without a restart.
-
-Tray-only is the default and how the app is meant to live. With the taskbar button on, the window
-also takes an Alt+Tab entry, minimises and restores as the taskbar button is clicked, and that
-button can be right-clicked and pinned — which is the way to pin a tray-resident app to the
-taskbar.
-
-## Use
-
-1. Point it at a repository: the **folder** button in the title bar (`Ctrl+O`), or drop a
-   folder onto the window, or click the path in the title bar (`Ctrl+L`) and type one. Any
-   folder inside the repository or inside any of its worktrees will do — `git worktree list`
-   reports all of them from any of them.
-2. Per row, from the buttons on the right:
-   - **`{}`** — Visual Studio Code. Tinted when that worktree already has a window, and then
-     it focuses rather than launches. Double-clicking the row does the same thing.
-   - **terminal** — Windows Terminal (`wt -d`), falling back to PowerShell.
-   - **folder** — File Explorer.
-   - **`VS`** — only for repositories that carry a Visual Studio script; see below. Once
-     something is open there are two: the solution, and a folder marked `VS` for the other way in.
-   - **`PR`** — only when that branch has an open pull request; opens it in the browser.
-3. **Right-click a row** for the same actions plus **Copy path** and **Copy branch name**.
-   Hovering a row shows its full path; hovering the drift counts spells them out in words and
-   names the upstream they are measured against.
-4. **Refresh** (`F5`) re-reads everything, and so does showing the window from the tray. The
-   pin keeps the window above other windows, and survives a restart.
+- **One instance.** Launching it again shows the copy already running.
+- **It sizes itself** to the list, capped to the monitor, and parks in the corner by the
+  notification area until you move it — then it remembers where you put it.
+- **The pin** keeps the window above other windows, and survives a restart.
+- Hovering the title-bar icon says which version this is.
+- WPF on .NET 10 with the Fluent theme, following the Windows light/dark setting live, and
+  Per-Monitor V2 DPI aware. Built for Windows 11; on Windows 10 the title-bar colour and
+  rounded corners simply do not apply.
 
 ## Build
 
@@ -115,23 +110,33 @@ For development, `dotnet run` or open `WorktreeHelper.csproj`.
 test.cmd
 ```
 
-covers the two parsers and the symbolic-link rewriting — the places the bugs actually were.
-The link tests build junctions in `%TEMP%`, which needs no elevation; where even that is
-refused they assert nothing rather than failing on the environment.
+covers the parsers, the update service and the symbolic-link rewriting — the places the bugs
+actually were. The link tests build junctions in `%TEMP%`, which needs no elevation; where even
+that is refused they assert nothing rather than failing on the environment.
+
+```powershell
+tools\make-demo-repo.ps1
+```
+
+builds `demo\rubber-duck`, which git ignores: a throwaway repository whose four worktrees
+are each left in a different state — clean, files open, commits to push, commits to pull —
+which is what the picture at the top of this file is of. Handy for trying a change against
+something other than your own work. `-Root` and `-Name` put it elsewhere, `-Remove` takes it
+away again.
 
 ## Symbolic links and junctions
 
 A folder reached through a link has two names — `C:\git\repo` may be a link to `D:\git\repo` —
 and git always reports the target. Typing the path is the way to pick the link itself, because
-the folder browser resolves links and can only ever hand back the target. When the chosen
-folder is reached through one, the worktree paths are rewritten back through it
-([`LinkPaths.cs`](LinkPaths.cs)), so the list and everything the buttons launch use the name
-you picked. Each rewritten path is checked to be a real second name for that folder; anything
-outside the link keeps the path git gave.
+the folder browser resolves links and can only ever hand back the target. When the chosen folder
+is reached through one, the worktree paths are rewritten back through it
+([`LinkPaths.cs`](LinkPaths.cs)), so the list and everything the buttons launch use the name you
+picked. Each rewritten path is checked to be a real second name for that folder; anything outside
+the link keeps the path git gave.
 
 ## The Visual Studio button
 
-This one is opt-in by convention rather than configuration: a worktree whose root holds
+Opt-in by convention rather than configuration: a worktree whose root holds
 **`CreateVS-2026.bat`** gets a `VS` button. Repositories without such a script show nothing
 there, which is why the rest of the app works anywhere.
 
@@ -144,9 +149,9 @@ While nothing has the worktree open, one button asks which way in is wanted:
   builds configured through CMake. Visual Studio is located through `vswhere`, which ships with
   its installer, rather than by guessing at a path.
 
-Once either way is open, that single button is replaced by one per way: the open one tints and
-focuses its window, the other starts the second instance with no further asking. Two instances
-on one worktree — the Windows solution and the folder — is a supported way to work.
+Once either way is open, that single button becomes one per way: the open one tints and focuses
+its window, the other starts the second instance with no further asking. Two instances on one
+worktree — the Windows solution and the folder — is a supported way to work.
 
 Which is which comes from the **Running Object Table** rather than window titles: every worktree
 generates a solution of the same name, so the captions are identical, and a custom title template
@@ -157,15 +162,15 @@ the two do not share a Running Object Table.
 
 ## The pull request button
 
-A worktree whose branch has an open pull request gets a `PR` button at the end of its row,
-which opens it in the default browser; hovering names and numbers it, and says if it is still a
-draft. The repository is taken from `remote.origin.url`, so this needs no configuration and
-nothing installed — but a **private** repository needs a token to read, and the app will not ask
-you for one. It looks in `GH_TOKEN`, `GITHUB_TOKEN`, then `gh auth token` if the GitHub CLI
-happens to be installed, then git's own credential helper, which is invoked with
-`credential.interactive=false` and `GIT_TERMINAL_PROMPT=0` so that a machine with nothing stored
-cannot be made to raise a sign-in dialog by a background refresh. Where none of those answer,
-no buttons appear. A public repository needs none of it.
+A worktree whose branch has an open pull request gets a `PR` button at the end of its row, which
+opens it in the default browser; hovering names and numbers it, and says if it is still a draft.
+The repository is taken from `remote.origin.url`, so this needs no configuration and nothing
+installed — but a **private** repository needs a token to read, and the app will not ask you for
+one. It looks in `GH_TOKEN`, `GITHUB_TOKEN`, then `gh auth token` if the GitHub CLI happens to be
+installed, then git's own credential helper, which is invoked with `credential.interactive=false`
+and `GIT_TERMINAL_PROMPT=0` so that a machine with nothing stored cannot be made to raise a
+sign-in dialog by a background refresh. Where none of those answer, no buttons appear. A public
+repository needs none of it.
 
 > VS Code exposes no API for "which folders are open", and its process list only ever names the
 > folder the *first* window was launched with, so that detection matches window titles instead.
@@ -194,7 +199,7 @@ no buttons appear. A public repository needs none of it.
 | `UpdateService.cs` | Finds a newer GitHub release, and installs it over this copy |
 | `MonitorWorkArea.cs` | Work area of the monitor the window is on, for the auto-size cap |
 | `Settings.cs` | JSON settings in `%APPDATA%` |
-| `tests\WorktreeHelper.Tests` | xunit cover for the parsers and the link rewriting |
+| `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service and the link rewriting |
 
 ## License
 

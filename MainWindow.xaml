@@ -41,7 +41,7 @@
             <MenuItem Header="Refresh" Click="Refresh_Click"/>
             <MenuItem Header="Show in taskbar" IsCheckable="True" Click="TrayShowInTaskbar_Click"
                       Tag="tray.taskbar"
-                      ToolTip="Give the window a taskbar button and an Alt+Tab entry as well as the tray icon"/>
+                      ToolTip="Live in the taskbar rather than the notification area: a taskbar button and an Alt+Tab entry, no tray icon, and closing the window exits"/>
             <Separator/>
             <MenuItem Header="Exit" Click="TrayExit_Click"/>
         </ContextMenu>
@@ -366,6 +366,7 @@
              resize mode, so the window could not be moved at all. -->
         <Grid Grid.Row="0" Height="28" Background="Transparent"
               MouseLeftButtonDown="Caption_MouseDown"
+              MouseRightButtonUp="Caption_RightClick"
               shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -373,9 +374,13 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- The icon is where you look to ask what this is and which version of it. -->
-            <Image Grid.Column="0" Width="16" Height="16" Margin="8,0,8,0" VerticalAlignment="Center"
+            <!-- The icon is where you look to ask what this is and which version of it, and
+                 where Windows has always kept a window’s own menu. Clicking it opens ours,
+                 which is the only way to reach it once there is no tray icon to right-click. -->
+            <Image x:Name="AppIcon" Grid.Column="0" Width="16" Height="16" Margin="8,0,8,0"
+                   VerticalAlignment="Center" Cursor="Hand"
                    Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"
+                   MouseLeftButtonUp="AppIcon_Click"
                    ToolTip="{Binding AppTooltip}"
                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
@@ -422,7 +427,7 @@
                 <ToggleButton Style="{StaticResource PinButton}" IsChecked="{Binding IsPinned}"
                               Content="&#xE718;" AutomationProperties.Name="Keep window on top"/>
                 <Button Style="{StaticResource CloseButton}" Click="Close_Click"
-                        Content="&#xE8BB;" ToolTip="Close to the tray (Esc)"
+                        Content="&#xE8BB;" ToolTip="{Binding CloseHint}"
                         AutomationProperties.Name="Close"/>
             </StackPanel>
         </Grid>
@@ -453,11 +458,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"
-                           Text="Show in the taskbar too, or the system tray only?"/>
+                           Text="Live in the taskbar, or in the system tray?"/>
                 <Button Grid.Column="1" Content="Taskbar" Margin="8,0,0,0" Padding="10,3" FontSize="12"
-                        Click="ChooseTaskbar_Click"/>
-                <Button Grid.Column="2" Content="Tray only" Margin="6,0,0,0" Padding="10,3" FontSize="12"
-                        Click="ChooseTrayOnly_Click"/>
+                        Click="ChooseTaskbar_Click"
+                        ToolTip="A taskbar button and an Alt+Tab entry. Closing the window exits the app."/>
+                <Button Grid.Column="2" Content="System tray" Margin="6,0,0,0" Padding="10,3" FontSize="12"
+                        Click="ChooseTrayOnly_Click"
+                        ToolTip="An icon in the notification area. Closing the window only puts it away."/>
             </Grid>
         </Border>
 

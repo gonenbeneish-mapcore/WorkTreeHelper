@@ -4,3 +4,5 @@ dist/
 .vs/
 *.user
 *.zip
+# tools/make-demo-repo.ps1 builds a throwaway repository here
+demo/
