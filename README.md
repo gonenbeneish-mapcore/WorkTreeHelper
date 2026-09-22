@@ -22,9 +22,7 @@ commits not yet pushed or pulled. **A quiet row means nothing is waiting in it.*
 title bar. Any folder inside the project will do; it finds the rest by itself. It remembers,
 so this is a first-run thing.
 
-**Open one.** The buttons at the right of each row:
-
-![The end of one row: the changed-file count, the commits not yet pushed, then the VS Code, terminal, Explorer and pull-request buttons](docs/buttons.png)
+**Open one.** The buttons at the right of each row, in order:
 
 | Button | Opens |
 |---|---|

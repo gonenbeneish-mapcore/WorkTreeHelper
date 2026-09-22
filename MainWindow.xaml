@@ -271,6 +271,16 @@
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
+        <!-- The terminal button. Lettering for the same reason as the buttons below it: the
+             icon font's only terminal glyph is a window with "c:\" crammed inside it, which
+             at this size is a grey smudge, while a prompt reads as a command line at any
+             size and sits naturally beside the {} next to it. -->
+        <Style x:Key="TerminalButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Cascadia Code, Consolas"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="ToolTip" Value="Open a terminal in this worktree"/>
+        </Style>
         <!-- Visual Studio buttons. Lettering rather than a glyph: the icon font has nothing
              that reads as Visual Studio, and two initials are unmistakable.
 
@@ -545,8 +555,8 @@
                                             </TextBlock>
                                         </Grid>
                                     </Button>
-                                    <Button Style="{StaticResource RowButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
-                                            Content="&#xE756;" ToolTip="Open a terminal in this worktree"
+                                    <Button Style="{StaticResource TerminalButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
+                                            Content="&gt;_"
                                             AutomationProperties.Name="Open a terminal in this worktree"/>
                                     <Button Style="{StaticResource RowButton}" Click="OpenExplorer_Click" Tag="{Binding Path}"
                                             Content="&#xE8B7;" ToolTip="Show this folder in File Explorer"
