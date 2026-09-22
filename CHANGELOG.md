@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.1
+
+- The taskbar button minimises the window and restores it; it had no minimize box, so the
+  shell would only ever raise it.
+- The two Visual Studio buttons no longer share markings, so opening one stops the other
+  claiming it will focus a window it has nothing to do with.
+- The menu that offers the two ways into Visual Studio marks each with the button it becomes.
+- An update announces itself: a notice under the title bar for a few seconds, and a button
+  first in the row carrying the version rather than a tinted glyph among glyphs.
+- Refresh asks GitHub about a newer release as well, rather than leaving it to the daily check.
+- Release notes that begin with a byte order mark no longer show it as a stray bullet.
+- The window keeps the corner it was left in when it is minimised.
+
 ## v1.4.0
 
 - **Two Visual Studio instances on one worktree.** While nothing is open the `VS` button asks

@@ -80,11 +80,21 @@ public class SummariseNotesTests
         Assert.EndsWith("…", summary);
     }
 
+    [Fact]
+    public void Ignores_a_byte_order_mark_at_the_front()
+    {
+        // What GitHub returns for a release whose notes were written from PowerShell.
+        var summary = UpdateService.Summarise("\uFEFF## What is new\n\n- **It updates itself.** A button appears.");
+
+        Assert.Equal("- It updates itself. A button appears.", summary);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("## Only a heading")]
+    [InlineData("\uFEFF## Only a heading")]
     public void Notes_with_nothing_in_them_add_nothing(string? body)
         => Assert.Equal("", UpdateService.Summarise(body));
 }

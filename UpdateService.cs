@@ -108,7 +108,10 @@ internal static class UpdateService
 
         foreach (var raw in notes.Replace("\r\n", "\n").Split('\n'))
         {
-            var line = raw.Trim();
+            // A byte order mark counts as neither whitespace nor anything else, so it stays
+            // at the front of the first line and quietly stops it being recognised as a
+            // heading or a bullet. Release bodies written from PowerShell arrive with one.
+            var line = raw.Trim('\uFEFF').Trim();
             if (line.Length == 0) continue;
 
             // Headings and rules are page furniture; bullets read fine as they are.

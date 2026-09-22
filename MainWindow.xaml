@@ -6,7 +6,7 @@
         Title="{Binding WindowTitle}"
         Icon="app.ico"
         Width="700" Height="380" MinWidth="440" MinHeight="80"
-        ResizeMode="NoResize"
+        ResizeMode="CanMinimize"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
         Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -20,7 +20,12 @@
 
          The window background is set explicitly because of this. The Fluent theme leaves it
          transparent for a Mica backdrop, and a window with no DWM frame and no background of
-         its own is a see-through window. -->
+         its own is a see-through window.
+
+         CanMinimize rather than NoResize, which is all the sizing the user gets either way:
+         NoResize leaves the window without WS_MINIMIZEBOX, and the shell will not minimize a
+         window that says it cannot be minimized - so clicking its taskbar button only ever
+         raised it. The minimize box is never drawn: the caption is the app's own. -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="28" ResizeBorderThickness="0" GlassFrameThickness="0"
                       UseAeroCaptionButtons="False" CornerRadius="0"/>
@@ -113,10 +118,81 @@
                 </Setter.Value>
             </Setter>
         </Style>
-<!-- An update waiting to be installed. Accent-tinted because it is the one control
-             here that appears on its own and wants noticing. -->
-        <Style x:Key="UpdateButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
-            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+<!-- An update waiting to be installed. The one control up here that appears on its own
+             and has to be noticed, so it is the only filled thing in the caption: an accent
+             block with the version written out, first in the row. Tinting the glyph and
+             leaving it among five other glyphs was not enough to be seen. -->
+        <Style x:Key="UpdateButton" TargetType="Button">
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="10"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- The two buttons inside the update notice. Drawn in white rather than in theme
+             brushes: they sit on the accent fill, where the theme’s own control colours
+             would be a grey box on a coloured card. -->
+        <Style x:Key="ToastButton" TargetType="Button">
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fill" CornerRadius="4" Background="#26FFFFFF"
+                                BorderBrush="#59FFFFFF" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="#40FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ToastCloseButton" TargetType="Button" BasedOn="{StaticResource ToastButton}">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
         </Style>
         <!-- The window's own close button, since the system one went with the caption.
              Full caption height and red on hover, the way every other window behaves. -->
@@ -195,13 +271,51 @@
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
-        <!-- Visual Studio button. Lettering rather than a glyph: the icon font has nothing
-             that reads as Visual Studio, and two initials are unmistakable. -->
+        <!-- Visual Studio buttons. Lettering rather than a glyph: the icon font has nothing
+             that reads as Visual Studio, and two initials are unmistakable.
+
+             Only the look is shared below. Each button stands for one mode and says what
+             pressing it will do in that mode, because once both are on the row the only
+             question left is which of the two is the one already running. The modes no
+             longer inherit each other’s triggers: the folder button derived from the
+             solution one, so opening the solution accent-marked both buttons and left the
+             folder one offering to focus a window it has nothing to do with. -->
         <Style x:Key="VsButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="ToolTip" Value="Open this worktree in Visual Studio"/>
+        </Style>
+        <!-- What each way into Visual Studio looks like: the lettering for the solution, and
+             a folder with VS written in its body for the other one. Defined here rather than
+             in the row template because the menu that offers the choice draws the same two
+             marks beside its items, and one definition keeps them the same.
+
+             x:Shared="False" hands out a new visual per lookup — an element belongs to one
+             parent, and these are asked for once per row and again every time the menu
+             opens. Neither sets a Foreground, so both take the colour of whatever holds
+             them, which is what lets the open mode tint its button. -->
+        <TextBlock x:Key="VsSolutionIcon" x:Shared="False" Text="VS"
+                   FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Grid x:Key="VsFolderIcon" x:Shared="False">
+            <!-- 16 rather than the 14 its neighbours use: the smallest that leaves the
+                 lettering legible while still reading as the same size as the Explorer
+                 folder beside it. -->
+            <TextBlock Text="&#xE8B7;" FontSize="16" HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+            <!-- In the folder’s body, which sits below the glyph’s centre because of the
+                 tab along its top. -->
+            <TextBlock Text="VS" FontSize="6" FontWeight="SemiBold" FontFamily="Segoe UI"
+                       Margin="0,2.5,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+        <!-- Shown while neither mode is open, where there is still a choice to make. -->
+        <Style x:Key="VsChooserButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
+            <Setter Property="ToolTip" Value="Open this worktree in Visual Studio — the generated solution, or the folder"/>
+        </Style>
+        <!-- The solution mode, once either mode is open. -->
+        <Style x:Key="VsSolutionButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
+            <Setter Property="ToolTip" Value="Generate the solution and open it in a second Visual Studio, alongside the folder one"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsSolutionOpen}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
@@ -209,14 +323,14 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-<!-- The same button for the folder mode. Its content is a folder with VS written inside
-             it, so it reads as "Visual Studio, the folder one" in the width of one button. -->
+        <!-- The folder mode. Its content is a folder with VS written inside it, so it reads
+             as "Visual Studio, the folder one" in the width of one button. -->
         <Style x:Key="VsFolderButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
-            <Setter Property="ToolTip" Value="Open this worktree as a folder in Visual Studio"/>
+            <Setter Property="ToolTip" Value="Open this worktree as a folder in a second Visual Studio, alongside the solution one"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsFolderOpen}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
-                    <Setter Property="ToolTip" Value="Open as a folder in Visual Studio — click to focus that window"/>
+                    <Setter Property="ToolTip" Value="This worktree is open as a folder in Visual Studio — click to focus that window"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -280,21 +394,28 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                <Button Style="{StaticResource RowButton}" Click="SelectFolder_Click"
-                        Content="&#xE838;" ToolTip="Select a folder inside a git repository (Ctrl+O)"
-                        AutomationProperties.Name="Select folder"/>
-                <!-- Only there when a newer release exists; its tooltip names the version. -->
+                <!-- First, ahead of the controls that are always here: an update is the
+                     one thing in this caption that was not there a moment ago, and the eye
+                     lands on the start of the group. Only there when a newer release
+                     exists, and its tooltip carries the release notes. -->
                 <Button Style="{StaticResource UpdateButton}" Click="Update_Click"
-                        Content="&#xE896;"
                         AutomationProperties.Name="Install the update"
                         IsEnabled="{Binding IsUpdating, Converter={x:Static local:BoolToVisibilityConverter.Not}}"
                         Visibility="{Binding HasUpdate, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding UpdateLabel}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <!-- A string tooltip is laid out on one line however long it is, and
                          release notes are long. -->
                     <Button.ToolTip>
                         <TextBlock Text="{Binding UpdateTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
                     </Button.ToolTip>
                 </Button>
+                <Button Style="{StaticResource RowButton}" Click="SelectFolder_Click"
+                        Content="&#xE838;" ToolTip="Select a folder inside a git repository (Ctrl+O)"
+                        AutomationProperties.Name="Select folder"/>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh (F5)"
                         AutomationProperties.Name="Refresh"/>
@@ -428,28 +549,16 @@
                                     <!-- Until something is open there is a choice to make, so one button asks.
                                          Afterwards it is replaced by one button per mode: the open one focuses
                                          its window, the other starts the second instance without asking. -->
-                                    <Button Style="{StaticResource VsButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
+                                    <Button Style="{StaticResource VsChooserButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
                                             Content="VS" AutomationProperties.Name="Open in Visual Studio"
                                             Visibility="{Binding ShowVisualStudioChooser, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
-                                    <Button Style="{StaticResource VsButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
+                                    <Button Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
                                             Content="VS" AutomationProperties.Name="The Visual Studio solution"
                                             Visibility="{Binding IsOpenInVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                     <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
                                             AutomationProperties.Name="This worktree as a folder in Visual Studio"
-                                            Visibility="{Binding IsOpenInVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
-                                        <Grid>
-                                            <!-- 16 rather than the 14 its neighbours use: the smallest that
-                                                 leaves the lettering legible while still reading as the same
-                                                 size as the Explorer folder beside it. -->
-                                            <TextBlock Text="&#xE8B7;" FontSize="16" HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
-                                            <!-- In the folder's body, which sits below the glyph's centre because
-                                                 of the tab along its top. -->
-                                            <TextBlock Text="VS" FontSize="6" FontWeight="SemiBold" FontFamily="Segoe UI"
-                                                       Margin="0,2.5,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Button>
+                                            Content="{StaticResource VsFolderIcon}"
+                                            Visibility="{Binding IsOpenInVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                     <!-- Only where the branch has an open pull request. -->
                                     <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
                                             Tag="{Binding PullRequest}" Content="PR"
@@ -495,6 +604,46 @@
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxWidth="420"
                    Text="Select a folder inside a git repository (or drop one here) to list its worktrees."
                    Visibility="{Binding ShowEmptyHint, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+
+        <!-- What announces an update rather than waiting to be spotted: it arrives under
+             the caption, beside the button it is about, and takes itself away after a few
+             seconds.
+
+             In a Canvas because a Canvas asks for no space of its own, however large the
+             thing inside it. The window sizes itself to its contents, so a notice that took
+             part in that measurement would push the window wider for as long as it was up
+             and let it snap back when it went: measured at 1149px against 715px with the
+             notice widened past the rows behind it. Nothing constrains it to the window now,
+             so its MaxWidth stays under the window’s own MinWidth of 440.
+
+             The pointer resting on it stops the countdown — nothing should disappear
+             from under someone who is reading it. -->
+        <Canvas Grid.Row="1" Grid.RowSpan="4" Panel.ZIndex="1">
+        <Border x:Name="UpdateToast" Canvas.Top="6" Canvas.Right="6"
+                Padding="12,9" CornerRadius="8" MaxWidth="420"
+                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                MouseEnter="UpdateToast_MouseEnter" MouseLeave="UpdateToast_MouseLeave"
+                Visibility="{Binding ShowUpdateToast, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                           FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"
+                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
+                    <TextBlock Text="{Binding UpdateHeadline}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding UpdateDetail}" FontSize="11" Opacity="0.85" MaxWidth="260"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                </StackPanel>
+                <Button Style="{StaticResource ToastButton}" Content="Install" Click="Update_Click"
+                        IsEnabled="{Binding IsUpdating, Converter={x:Static local:BoolToVisibilityConverter.Not}}"
+                        AutomationProperties.Name="Install the update"/>
+                <Button Style="{StaticResource ToastCloseButton}" Content="&#xE8BB;" Click="DismissUpdateToast_Click"
+                        ToolTip="Dismiss. The button in the caption stays."
+                        AutomationProperties.Name="Dismiss"/>
+            </StackPanel>
+        </Border>
+        </Canvas>
 
         <!-- Drop target. Last child so it covers the rest, and hit-testing nothing so the
              drag still reaches the window underneath it. -->

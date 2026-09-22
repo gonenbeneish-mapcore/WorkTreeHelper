@@ -48,11 +48,16 @@ PowerShell. The exe is unsigned, so Windows shows a SmartScreen prompt the first
 
 ## Updating
 
-The app asks GitHub for the latest release when it starts and once a day after that. When one
-is newer than the copy you are running, a **download** button appears in the title bar, after
-the folder button; hovering it names the version on offer, the one you have, and the first few
-lines of that release's notes. Pressing it
-fetches the release, puts the new exe where this one lives, and restarts into it.
+The app asks GitHub for the latest release when it starts, whenever you press **Refresh**, and
+once a day otherwise. When one is newer than the copy you are running, it says so: a notice
+slides under the title bar naming the version, with **Install** on it, and takes itself away
+after a few seconds — or stays as long as the pointer is on it. A release found while the
+window is in the tray is announced the next time you open it.
+
+The notice leaves behind the button that does the work: first in the title bar, carrying the
+version it offers, and hovering it adds the version you have and the first few lines of that
+release's notes. Pressing either fetches the release, puts the new exe where this one lives,
+and restarts into it.
 
 Nothing is disturbed until the download has arrived and the exe inside it has been checked to
 report the version the release claims, so an interrupted or failed update leaves the app as it
@@ -70,8 +75,9 @@ remembered, and **Show in taskbar** on the tray menu changes it at any time — 
 immediately, without a restart.
 
 Tray-only is the default and how the app is meant to live. With the taskbar button on, the window
-also takes an Alt+Tab entry and can be minimised, and its button can be right-clicked and pinned
-— which is the way to pin a tray-resident app to the taskbar.
+also takes an Alt+Tab entry, minimises and restores as the taskbar button is clicked, and that
+button can be right-clicked and pinned — which is the way to pin a tray-resident app to the
+taskbar.
 
 ## Use
 

@@ -100,9 +100,43 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!Set(ref _update, value)) return;
             OnPropertyChanged(nameof(HasUpdate));
             OnPropertyChanged(nameof(UpdateTooltip));
+            OnPropertyChanged(nameof(UpdateLabel));
+            OnPropertyChanged(nameof(UpdateHeadline));
+            OnPropertyChanged(nameof(UpdateDetail));
         }
     }
     public bool HasUpdate => Update is not null;
+
+    /// <summary>
+    /// What the caption button reads. The version is written on it rather than left to the
+    /// tooltip: a button nobody hovers says nothing, and this one has one job to advertise.
+    /// </summary>
+    public string UpdateLabel => IsUpdating
+        ? "Installing\u2026"
+        : Update is { } release ? $"Update to {release.Version}" : "";
+
+    /// <summary>The notice's first line: what is on offer.</summary>
+    public string UpdateHeadline => Update is { } release ? $"{AppName} {release.Version} is available" : "";
+
+    /// <summary>
+    /// Its second line: the release's own headline if it wrote one, and otherwise the version
+    /// being replaced, which is the next thing anyone asks.
+    /// </summary>
+    public string UpdateDetail
+    {
+        get
+        {
+            if (Update is not { } release) return "";
+
+            // The notes arrive summarised, which takes off the headings and the bold markers
+            // but leaves the bullets — they read fine in a tooltip and look like a stray
+            // dash at the start of a line of their own.
+            var first = release.Notes.Split('\n')
+                .Select(l => l.Trim().TrimStart('-', '*', '\u2022').Trim())
+                .FirstOrDefault(l => l.Length > 0);
+            return first is { Length: > 0 } ? first : $"You are running {UpdateService.Current}";
+        }
+    }
 
     /// <summary>
     /// What the app calls itself and which version this is, for the icon it is shown on. The
@@ -131,7 +165,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public bool IsUpdating
     {
         get => _isUpdating;
-        private set => Set(ref _isUpdating, value);
+        private set
+        {
+            if (!Set(ref _isUpdating, value)) return;
+            OnPropertyChanged(nameof(UpdateLabel));
+        }
+    }
+
+    private bool _showUpdateToast;
+    /// <summary>Whether the update notice is up. See <see cref="AnnounceUpdate"/>.</summary>
+    public bool ShowUpdateToast
+    {
+        get => _showUpdateToast;
+        private set => Set(ref _showUpdateToast, value);
     }
 
     private bool _showTaskbarQuestion;
@@ -242,6 +288,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _updateCheck.Tick += (_, _) => _ = CheckForUpdateAsync();
         _updateCheck.Start();
 
+        _toastLife.Tick += (_, _) => HideUpdateToast();
+
         _statusReset.Tick += (_, _) =>
         {
             _statusReset.Stop();
@@ -267,6 +315,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         TitleBar.Round(this);
         };
         Deactivated += (_, _) => _deactivatedUtc = DateTime.UtcNow;
+
+        // Minimizing is the taskbar's way of putting the window away, so it gets what hiding
+        // to the tray gets: the spot it was left in on the way out, a fresh list on the way
+        // back. Worktrees come and go while the window is down.
+        StateChanged += (_, _) =>
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                SavePlacement();
+                return;
+            }
+
+            _ = RefreshAsync();
+            AnnounceUpdate();
+        };
 
         _tray = new TrayIcon(AppTooltip);
         _tray.Clicked += ToggleWindow;
@@ -334,6 +397,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // The bar is gone, so the window is taller than its contents; nothing else would
         // notice until the next refresh.
         AutoSize();
+
+        // Anything the question was standing in the way of can be said now.
+        AnnounceUpdate();
     }
 
     private void TrayShowInTaskbar_Click(object sender, RoutedEventArgs e)
@@ -489,6 +555,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     private Task RefreshOrCommitAsync()
     {
+        // Refresh is what someone presses when they want the app to go and look, so it asks
+        // GitHub about a newer release as well. The automatic check is a daily one, which can
+        // leave a release sitting unnoticed for most of a day. Not awaited: the worktrees are
+        // what was asked for, and they should not wait on GitHub.
+        _ = CheckForUpdateAsync();
+
         var typed = ShowPathBox ? RepoPathBox.Text.Trim().Trim('"') : "";
         return typed.Length > 0 && !string.Equals(typed, RepoPath, StringComparison.OrdinalIgnoreCase)
             ? SetRepoAsync(typed)
@@ -591,9 +663,69 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (IsUpdating) return;
         Update = await UpdateService.CheckAsync();
+        AnnounceUpdate();
     }
 
     private void Update_Click(object sender, RoutedEventArgs e) => _ = InstallUpdateAsync();
+
+    // ---- The update notice --------------------------------------------------
+
+    /// <summary>How long the notice stays up on its own.</summary>
+    private static readonly TimeSpan ToastLife = TimeSpan.FromSeconds(9);
+
+    private readonly DispatcherTimer _toastLife = new() { Interval = ToastLife };
+
+    /// <summary>The version the notice has already been shown for, so it is shown once.</summary>
+    private Version? _announced;
+
+    /// <summary>
+    /// Puts the notice up for a release the user has not been told about yet.
+    /// </summary>
+    /// <remarks>
+    /// Only while the window is actually on screen. The check also runs on a timer, and an
+    /// announcement made to a window that is hidden in the tray or minimized is one the user
+    /// never sees; there is nothing to do but wait, so showing the window calls this again.
+    /// </remarks>
+    private void AnnounceUpdate()
+    {
+        if (Update is not { } release || IsUpdating) return;
+        if (!IsVisible || WindowState == WindowState.Minimized) return;
+        // The one-time taskbar question sits exactly where the notice lands, and covers the
+        // two buttons that answer it. That question is asked once in the life of the app;
+        // an update can wait the few seconds it takes to answer.
+        if (ShowTaskbarQuestion) return;
+        if (_announced == release.Version) return;
+
+        _announced = release.Version;
+        ShowUpdateToast = true;
+        UpdateToast.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+        _toastLife.Stop();
+        _toastLife.Start();
+    }
+
+    /// <summary>
+    /// Takes the notice away. The caption button stays: the notice is how an update
+    /// announces itself, not the only way back to it.
+    /// </summary>
+    private void HideUpdateToast()
+    {
+        _toastLife.Stop();
+        if (!ShowUpdateToast) return;
+
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(220));
+        fade.Completed += (_, _) => ShowUpdateToast = false;
+        UpdateToast.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void DismissUpdateToast_Click(object sender, RoutedEventArgs e) => HideUpdateToast();
+
+    private void UpdateToast_MouseEnter(object sender, MouseEventArgs e) => _toastLife.Stop();
+
+    private void UpdateToast_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (ShowUpdateToast) _toastLife.Start();
+    }
 
     /// <summary>
     /// Installs the waiting release over this copy and restarts into it.
@@ -608,6 +740,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (Update is not { } release || IsUpdating) return;
 
+        HideUpdateToast();
         IsUpdating = true;
         try
         {
@@ -677,6 +810,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // to false, or showing from the tray would quietly unpin the window.
         Topmost = true;
         Topmost = IsPinned;
+        // A release found while the window was away has waited for this.
+        AnnounceUpdate();
     }
 
     private int _trayAnchorX, _trayAnchorY;
@@ -968,9 +1103,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void SavePlacement()
     {
-        if (!_userPlaced || WindowState != WindowState.Normal || !IsVisible) return;
-        _settings.WindowLeft = Left;
-        _settings.WindowTop = Top;
+        if (!_userPlaced || !IsVisible) return;
+
+        // A minimized window's own Left and Top are the shell's parking spot off the side of
+        // the screen; RestoreBounds still holds the corner the user left it in.
+        var corner = WindowState == WindowState.Normal ? new Point(Left, Top) : RestoreBounds.Location;
+        if (double.IsNaN(corner.X) || double.IsInfinity(corner.X)) return;
+
+        _settings.WindowLeft = corner.X;
+        _settings.WindowTop = corner.Y;
         _settings.Save();
     }
 
@@ -1207,22 +1348,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             menu.Placement = PlacementMode.Bottom;
         }
 
+        // The same two marks the row carries once something is open, so the choice made here
+        // and the button it turns into are recognisably the same thing.
         menu.Items.Add(Choice(
             $"Generate the solution and open it  ({Launcher.VisualStudioScript})",
             "Runs the script, which generates the solution and opens it. This is the Windows build.",
+            FindResource("VsSolutionIcon"),
             () => RunVisualStudioScript(folder),
             preferred: true));
 
         menu.Items.Add(Choice(
             "Open this folder in Visual Studio",
             "Opens the worktree as a folder, for the builds configured through CMake.",
+            FindResource("VsFolderIcon"),
             () => OpenFolderInVisualStudio(folder)));
 
         menu.IsOpen = true;
 
-        static MenuItem Choice(string header, string explanation, Action run, bool preferred = false)
+        static MenuItem Choice(string header, string explanation, object icon, Action run, bool preferred = false)
         {
-            var item = new MenuItem { Header = header, ToolTip = explanation };
+            var item = new MenuItem { Header = header, ToolTip = explanation, Icon = icon };
             if (preferred) item.FontWeight = FontWeights.SemiBold;
             item.Click += (_, _) => run();
             return item;
