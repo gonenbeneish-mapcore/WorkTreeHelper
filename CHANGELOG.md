@@ -7,8 +7,9 @@
 - The buttons can be kept in columns, so each kind lines up down the list.
 - A clearer icon: a bonsai on a filled disc, pale or dark to suit the Windows theme.
 - What’s new is shown once, on the first run after an update.
-- The path in the title bar drags the window like the rest of it; the folder button picks one.
-- The path can be typed in Options instead, for opening a repository through a symbolic link.
+- The title bar shows the app and its version, and all of it drags the window.
+- The repository is chosen in Options: Browse, or type a path to open one through a link.
+- With no repository to show, the app starts with Options open.
 - Keyboard shortcuts are gone apart from Esc; everything else is a button.
 
 ## v1.4.2

@@ -30,25 +30,27 @@
 
     <StackPanel Margin="20,16,20,18">
 
-        <!-- The repository, as a path that can be typed. The folder button in the title bar
-             is the usual way to choose one, but a folder picker resolves symbolic links and
-             junctions, so it can only ever hand back the target; typing is the way to open
-             a repository through the link itself. Open, rather than Enter: Escape is the one
-             key the app answers to. -->
+        <!-- The repository, which is chosen here and nowhere else in the window. Browse is
+             the usual way; typing is for the one thing a folder picker cannot do, since it
+             resolves symbolic links and junctions and can only ever hand back the target.
+             Open, rather than Enter: Escape is the one key the app answers to. -->
         <TextBlock Style="{StaticResource Heading}" Text="Repository"/>
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBox x:Name="PathBox" Text="{Binding RepoPath, Mode=OneWay}" FontSize="12"
                      VerticalContentAlignment="Center"
                      AutomationProperties.Name="Repository path"/>
-            <Button x:Name="OpenButton" Grid.Column="1" Content="Open" Margin="8,0,0,0" Padding="14,4"
+            <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Padding="12,4"
+                    Click="Browse_Click" AutomationProperties.Name="Browse for a repository"/>
+            <Button x:Name="OpenButton" Grid.Column="2" Content="Open" Margin="6,0,0,0" Padding="14,4"
                     Click="Open_Click" AutomationProperties.Name="Open this repository"/>
         </Grid>
         <TextBlock Style="{StaticResource Explains}" Margin="0,6,0,4"
-                   Text="Any folder inside a git repository. Type the path to open one through a symbolic link: the folder button always follows a link to where it points."/>
+                   Text="Any folder inside a git repository. Browse for one, or type its path and press Open: typing is the way to open one through a symbolic link, since Browse always follows a link to where it points."/>
         <!-- What went wrong with the last path, if anything did. It is the main window's own
              message, so it reads the same here as in the bar under the list. -->
         <TextBlock Text="{Binding Error}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"

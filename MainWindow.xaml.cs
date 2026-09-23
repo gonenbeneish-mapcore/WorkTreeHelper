@@ -236,11 +236,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// What the caption reads: the repository path once one is loaded, briefly displaced by
-    /// whatever just happened. A worktree count went here once and only said what the list
-    /// below it already showed.
+    /// What the caption reads: the app and its version, briefly displaced by whatever just
+    /// happened. The repository's path went here once, and a worktree count before that;
+    /// the path is in Options now, and the count only said what the list already showed.
     /// </summary>
-    public string CaptionText => Status.Length == 0 ? AppName : Status;
+    public string CaptionText => Status.Length == 0 ? AppTooltip : Status;
 
     /// <summary>
     /// The window's own title. The caption is drawn by the app, but this is what the shell
@@ -415,11 +415,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// <summary>Opens a repository from a path typed in the options window.</summary>
     public Task OpenRepositoryAsync(string path) => SetRepoAsync(path);
 
-    private void Options_Click(object sender, RoutedEventArgs e)
+    private void Options_Click(object sender, RoutedEventArgs e) => ShowOptions();
+
+    private void ShowOptions()
     {
         // From the tray menu the window may be away, and the options belong to it.
         if (!IsVisible || WindowState == WindowState.Minimized) ShowFromTray();
         new OptionsWindow(this).ShowDialog();
+
+        // The options ask where the app lives, so once they have been open the first-run
+        // card asking the same thing has nothing left to ask. Answered by leaving it as it
+        // is: the tray, unless the options changed it.
+        if (ShowTaskbarQuestion)
+        {
+            _settings.AskedAboutTaskbar = true;
+            _settings.Save();
+            ShowTaskbarQuestion = false;
+            AutoSize();
+        }
     }
 
     private const string AppName = "Worktree Helper";
@@ -471,6 +484,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var last = _settings.LastRepoPath;
             if (!string.IsNullOrEmpty(last) && Directory.Exists(last))
                 await SetRepoAsync(last);
+
+            // With no repository to show - a first run, or one whose folder has gone - the
+            // window starts with Options open, which is where one is chosen. Queued, so the
+            // window is on screen behind it first and the update check is not held up by it.
+            if (!HasRepo) _ = Dispatcher.BeginInvoke(ShowOptions, DispatcherPriority.ApplicationIdle);
 
             // After the list, so a slow or unreachable GitHub delays nothing the user came for.
             _ = CheckForUpdateAsync();
@@ -597,7 +615,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     // ---- Repo selection ----------------------------------------------------
 
-    private void SelectFolder_Click(object sender, RoutedEventArgs e) => SelectFolder();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -664,7 +681,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try { DragMove(); } catch (InvalidOperationException) { }
     }
 
-    private void SelectFolder()
+    /// <summary>
+    /// Asks for a folder and opens the repository it is in. Called from Options, which is
+    /// where a repository is chosen; the dialog belongs to whichever window asked, so it
+    /// opens over that one rather than behind it.
+    /// </summary>
+    public void BrowseForRepository(Window owner)
     {
         var dlg = new OpenFolderDialog
         {
@@ -672,7 +694,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Multiselect = false,
             InitialDirectory = HasRepo ? RepoPath : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         };
-        if (dlg.ShowDialog(this) != true) return;
+        if (dlg.ShowDialog(owner) != true) return;
 
         // The browser always hands back link targets. When that target is just another
         // name for the folder already selected, keep the name the user picked instead of
@@ -749,7 +771,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             MergeWorktrees(list);
             HasWorktrees = Worktrees.Count > 0;
-            Rest(RepoPath);
+            // Settles on the app's own name and version, which is what the caption rests on.
+            Rest("");
             var count = $"{Worktrees.Count} worktree{(Worktrees.Count == 1 ? "" : "s")}";
             _tray?.SetTooltip($"{AppTooltip} — {RepoName}: {count}");
             await UpdateLaunchersAsync();

@@ -18,9 +18,9 @@ commits not yet pushed or pulled. **A quiet row means nothing is waiting in it.*
 
 ## Using it
 
-**Point it at your project.** Drag the folder onto the window, or press the folder button in the
-title bar. Any folder inside the project will do; it finds the rest by itself. It remembers,
-so this is a first-run thing.
+**Point it at your project.** The first run opens **Options** for you: press **Browse…** and
+pick the folder, or drag it onto the window. Any folder inside the project will do; it finds
+the rest by itself. It remembers, so this is a first-run thing.
 
 **Open one.** The buttons at the right of each row, in order:
 
@@ -37,8 +37,8 @@ row shows its full path, and hovering the counts says what they mean in words.
 
 ## Where it lives
 
-The first run asks where you want it: the **taskbar** or the **system tray**. One or the other —
-and either answer can be changed later.
+Options asks where you want it: the **taskbar** or the **system tray**. One or the other —
+and it can be changed at any time.
 
 | | System tray | Taskbar |
 |---|---|---|
@@ -56,7 +56,7 @@ The gear in the title bar opens them; every change applies as you make it.
 
 | Option | Choices |
 |---|---|
-| **Repository** | The path of the one listed, which can be typed — the way to open one through a symbolic link. |
+| **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
 | **A second Visual Studio** | **Allowed** (the default): once the solution or the folder is open, the row offers the other one too. **Not allowed**: it only offers to bring back the one that is open. |
 | **Buttons** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
@@ -100,7 +100,7 @@ exe sits, so a copy under `Program Files` will report that it cannot install its
 - **The pin** keeps the window above other windows, and survives a restart.
 - **The icon follows your theme**: a dark disc on a light taskbar, a pale one on a dark
   taskbar, so it stays findable either way. Clicking it in the title bar opens the app’s
-  menu, and hovering it says which version this is.
+  menu. The title bar itself says which version this is.
 - WPF on .NET 10 with the Fluent theme, following the Windows light/dark setting live, and
   Per-Monitor V2 DPI aware. Built for Windows 11; on Windows 10 the title-bar colour and
   rounded corners simply do not apply.

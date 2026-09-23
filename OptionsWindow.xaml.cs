@@ -29,6 +29,8 @@ public partial class OptionsWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void Browse_Click(object sender, RoutedEventArgs e) => _owner.BrowseForRepository(this);
+
     /// <summary>
     /// Opens the repository at the typed path. A path that fails leaves the message under the
     /// box and the text as typed, to be corrected; one that works shows up in the box as the

@@ -394,19 +394,15 @@
                    ToolTip="{Binding AppTooltip}"
                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
-            <!-- The path itself is the title, and nothing more: a press on it is a press on
-                 the caption, so it moves the window like the rest of the bar. It used to open a
-                 box to type a path into, which with a long path left almost nowhere to take
-                 hold of the window. The folder button chooses a folder, and the path can be
-                 typed in the options instead, for the one thing only typing can do - name a
-                 folder through a symbolic link.
+            <!-- The app and its version, briefly displaced by whatever just happened. Not the
+                 repository's path: that is in Options, where it can be changed, and a long one
+                 here left almost nowhere to take hold of the window. A press on this text is a
+                 press on the caption, so it moves the window like the rest of the bar.
 
-                 Capped, so a long path does not stretch the window to fit it; the whole of it
-                 is a hover away. -->
+                 Capped, so a long status message does not stretch the window to fit it. -->
             <TextBlock Grid.Column="1" Text="{Binding CaptionText}" VerticalAlignment="Center"
                        HorizontalAlignment="Left" MaxWidth="360"
                        FontSize="12" TextTrimming="CharacterEllipsis" Padding="0,6"
-                       ToolTip="{Binding RepoPath}"
                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
@@ -430,9 +426,6 @@
                         <TextBlock Text="{Binding UpdateTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
                     </Button.ToolTip>
                 </Button>
-                <Button Style="{StaticResource RowButton}" Click="SelectFolder_Click"
-                        Content="&#xE838;" ToolTip="Select a folder inside a git repository"
-                        AutomationProperties.Name="Select folder"/>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh"
                         AutomationProperties.Name="Refresh"/>
@@ -726,7 +719,7 @@
         <!-- Empty state -->
         <TextBlock Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxWidth="420"
-                   Text="Press the folder button above, or drop a folder here, to list the worktrees of the git repository it is in."
+                   Text="Choose a repository in Options (the gear above), or drop a folder here, to list its worktrees."
                    Visibility="{Binding ShowEmptyHint, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
 
         <!-- What announces an update rather than waiting to be spotted: it arrives under
