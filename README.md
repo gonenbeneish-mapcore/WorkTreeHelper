@@ -146,7 +146,7 @@ away again.
 ## Symbolic links and junctions
 
 A folder reached through a link has two names — `C:\git\repo` may be a link to `D:\git\repo` —
-and git always reports the target. Typing the path is the way to pick the link itself, because
+and git always reports the target. Typing the path (`Ctrl+L`) is the way to pick the link itself, because
 the folder browser resolves links and can only ever hand back the target. When the chosen folder
 is reached through one, the worktree paths are rewritten back through it
 ([`LinkPaths.cs`](LinkPaths.cs)), so the list and everything the buttons launch use the name you

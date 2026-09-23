@@ -395,17 +395,18 @@
                    ToolTip="{Binding AppTooltip}"
                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
-            <!-- The path itself is the title. Clicking it opens the box below to type in,
-                 which is the only way to name a folder through a symbolic link. -->
-            <!-- Left-aligned and capped: stretched across the column it covered the whole
-                 caption, and every press on it was a press on the text, so there was nowhere
-                 left to take hold of the window. -->
+            <!-- The path itself is the title, and nothing more: a press on it is a press on
+                 the caption, so it moves the window like the rest of the bar. It used to open a
+                 box to type a path into, which with a long path left almost nowhere to take
+                 hold of the window. The folder button chooses a folder; Ctrl+L still opens the
+                 box, for the one thing only typing can do - name a folder through a link.
+
+                 Capped, so a long path does not stretch the window to fit it; the whole of it
+                 is a hover away. -->
             <TextBlock Grid.Column="1" Text="{Binding CaptionText}" VerticalAlignment="Center"
                        HorizontalAlignment="Left" MaxWidth="360"
                        FontSize="12" TextTrimming="CharacterEllipsis" Padding="0,6"
-                       Cursor="Hand" MouseLeftButtonUp="CaptionPath_Click"
-                       MouseLeftButtonDown="CaptionPath_MouseDown"
-                       ToolTip="Click to type a repository path (Ctrl+L)"
+                       ToolTip="{Binding RepoPath}"
                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
@@ -459,9 +460,13 @@
 
         <!-- Worktree list. No column headers: with one line per row, "WORKTREE" over the
              names and "BRANCH" over the branches only said what the rows already show. -->
+        <!-- The folds under the title bar, one above the other: the first-run question, and
+             what is new in this version. In practice they never meet - someone new is asked
+             the question and has nothing to be told - but stacked, they could. -->
+        <StackPanel Grid.Row="2">
         <!-- Asked once, on the first run, and never again. The window is already on screen at
              that point, so this costs no dialog. -->
-        <Border Grid.Row="2" Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
+        <Border Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                 Visibility="{Binding ShowTaskbarQuestion, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
@@ -481,6 +486,81 @@
                         ToolTip="An icon in the notification area. Closing the window only puts it away."/>
             </Grid>
         </Border>
+
+        <!-- What is new, on the first run of a version the user has not been told about. It
+             folds away when closed and does not come back until the next version. The text is
+             the changelog's, so it is the same thing the release page says.
+
+             The notes are capped in width: the window sizes itself to its contents, and wrapped
+             text measured with room to spare would rather be one long line, which would drag
+             the window as wide as the screen allows. Capped in height too, with a scroll bar
+             for a long release, since a window that is all release notes has lost its point. -->
+        <Border Margin="6,4,6,0" Padding="12,9" CornerRadius="6"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource AccentFillColorDefaultBrush}" BorderThickness="1"
+                Visibility="{Binding ShowWhatsNew, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE735;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"
+                               VerticalAlignment="Center" Margin="0,0,8,0"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding WhatsNewHeading}" FontSize="13" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Close" Padding="12,3" FontSize="12"
+                        Click="DismissWhatsNew_Click" AutomationProperties.Name="Close what's new"/>
+
+                <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0" MaxHeight="240"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding WhatsNewNotes}" MaxWidth="480" HorizontalAlignment="Left">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:ReleaseNotes}">
+                                <StackPanel Margin="0,0,0,4">
+                                    <!-- The version, only when there is more than one to tell apart. -->
+                                    <TextBlock Text="{Binding Version}" FontSize="11" FontWeight="SemiBold"
+                                               Margin="0,4,0,2" Style="{StaticResource MutedText}"
+                                               Visibility="{Binding WhatsNewHasSeveral, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                    <ItemsControl ItemsSource="{Binding Points}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:ChangePoint}">
+                                                <Grid Margin="0,2,0,0">
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Level}" Value="1">
+                                                                    <Setter Property="Margin" Value="16,2,0,0"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="14"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="&#x2022;" FontSize="12" Style="{StaticResource MutedText}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12"
+                                                               TextWrapping="Wrap"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+        </StackPanel>
 
         <ScrollViewer Grid.Row="3" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Worktrees}">
@@ -657,7 +737,7 @@
         <!-- Empty state -->
         <TextBlock Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxWidth="420"
-                   Text="Select a folder inside a git repository (or drop one here) to list its worktrees."
+                   Text="Press the folder button above, or drop a folder here, to list the worktrees of the git repository it is in."
                    Visibility="{Binding ShowEmptyHint, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
 
         <!-- What announces an update rather than waiting to be spotted: it arrives under

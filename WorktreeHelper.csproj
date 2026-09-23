@@ -34,6 +34,8 @@
     <Resource Include="app.ico" />
     <!-- The pale-disc colourway, for a dark theme. Only app.ico can be the exe's own icon. -->
     <Resource Include="app-dark.ico" />
+    <!-- Read on the first run of a new version, to say what is new in it. -->
+    <EmbeddedResource Include="CHANGELOG.md" LogicalName="CHANGELOG.md" />
   </ItemGroup>
 
   <ItemGroup>

@@ -49,7 +49,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// Whether to give the path box a row of its own. Once a repository is chosen the caption
     /// shows its path, and the box is not needed again until that changes.
     /// </summary>
-    public bool ShowPathBox => !HasRepo || IsEditingPath;
+    public bool ShowPathBox => IsEditingPath;
 
     /// <summary>The repository folder's own name, for the tray tooltip.</summary>
     private string RepoName => Path.GetFileName(RepoPath.TrimEnd('\\', '/'));
@@ -272,6 +272,78 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ? "Close and exit the app (Alt+F4). Esc minimises."
         : "Close to the tray (Esc)";
 
+    // ---- What's new ----------------------------------------------------------
+
+    private bool _showWhatsNew;
+    /// <summary>Whether the what's-new fold is open under the title bar.</summary>
+    public bool ShowWhatsNew
+    {
+        get => _showWhatsNew;
+        private set => Set(ref _showWhatsNew, value);
+    }
+
+    /// <summary>The changelog sections the fold shows, newest first.</summary>
+    public IReadOnlyList<ReleaseNotes> WhatsNewNotes { get; private set; } = [];
+
+    /// <summary>"What's new in 1.5.0", or "since 1.4.1" when more than one version is shown.</summary>
+    public string WhatsNewHeading { get; private set; } = "";
+
+    /// <summary>More than one version to show, so each gets its number above its points.</summary>
+    public bool WhatsNewHasSeveral => WhatsNewNotes.Count > 1;
+
+    /// <summary>
+    /// Decides, once at startup, whether this is the first run of a version the user has not
+    /// been told about, and if so what to tell them.
+    /// </summary>
+    /// <remarks>
+    /// A first run of the app says nothing: everything is new to someone who has never seen
+    /// it, and they are asked about the taskbar instead. It is recorded as seen, so the next
+    /// version is the one that gets announced. Running an older copy than the one last seen
+    /// changes nothing, so coming back up to the newer one does not announce it twice.
+    /// </remarks>
+    private void PrepareWhatsNew()
+    {
+        var current = UpdateService.Current;
+        var lastSeen = UpdateService.ParseTag(_settings.LastSeenVersion);
+
+        if (_settings.IsNew)
+        {
+            MarkWhatsNewSeen();
+            return;
+        }
+        if (lastSeen is not null && lastSeen >= current) return;
+
+        var notes = WhatsNew.Since(WhatsNew.Parse(WhatsNew.ReadChangelog()), lastSeen, current);
+        if (notes.Count == 0)
+        {
+            // Nothing written for this version: nothing to show, and no reason to ask again.
+            MarkWhatsNewSeen();
+            return;
+        }
+
+        WhatsNewNotes = notes;
+        WhatsNewHeading = notes.Count > 1 && lastSeen is not null
+            ? $"What\u2019s new since {lastSeen}"
+            : $"What\u2019s new in {AppName} {notes[0].Version}";
+        ShowWhatsNew = true;
+    }
+
+    private void DismissWhatsNew_Click(object sender, RoutedEventArgs e)
+    {
+        ShowWhatsNew = false;
+        MarkWhatsNewSeen();
+        // The fold is gone, so the window is taller than what is left in it.
+        AutoSize();
+        // An update found while the fold was up was held back so as not to cover it.
+        AnnounceUpdate();
+    }
+
+    private void MarkWhatsNewSeen()
+    {
+        _settings.LastSeenVersion = UpdateService.Current.ToString();
+        _settings.Save();
+    }
+
     // ---- Options -----------------------------------------------------------
     //
     // Each of these is bound two ways by the options window, and applies the moment it is
@@ -392,6 +464,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // simply creates the window with the taskbar style it is going to keep.
         ShowInTaskbar = _settings.ShowInTaskbar;
         ShowTaskbarQuestion = !_settings.AskedAboutTaskbar;
+        PrepareWhatsNew();
 
         // Whatever an earlier update renamed aside is of no further use.
         UpdateService.CleanUpPreviousVersion();
@@ -606,11 +679,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try { DragMove(); } catch (InvalidOperationException) { }
     }
 
-    /// <summary>Claims the press so clicking the path edits it instead of dragging.</summary>
-    private void CaptionPath_MouseDown(object sender, MouseButtonEventArgs e) => e.Handled = true;
-
-    private void CaptionPath_Click(object sender, MouseButtonEventArgs e) => EditPath();
-
     /// <summary>Opens the path box and puts the caret in it, ready to be typed over.</summary>
     private void EditPath()
     {
@@ -641,7 +709,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             // Escape abandons the edit rather than hiding the window: leaving it to the
             // window's own binding would throw away what was typed and the window with it.
-            case Key.Escape when HasRepo:
+            // With or without a repository loaded - the box is only ever there because
+            // Ctrl+L asked for it, so there is nothing to keep it open for.
+            case Key.Escape:
                 RepoPathBox.Text = RepoPath;
                 IsEditingPath = false;
                 e.Handled = true;
@@ -857,7 +927,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // The one-time taskbar question sits exactly where the notice lands, and covers the
         // two buttons that answer it. That question is asked once in the life of the app;
         // an update can wait the few seconds it takes to answer.
-        if (ShowTaskbarQuestion) return;
+        if (ShowTaskbarQuestion || ShowWhatsNew) return;
         if (_announced == release.Version) return;
 
         _announced = release.Version;

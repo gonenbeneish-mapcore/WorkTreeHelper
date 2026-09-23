@@ -40,6 +40,19 @@ public sealed class Settings
     /// </summary>
     public bool AlignColumns { get; set; }
 
+    /// <summary>
+    /// The version whose what's-new was last closed, so the next version knows what to tell.
+    /// Null in a file from before this existed, which is taken as "not told about this one".
+    /// </summary>
+    public string? LastSeenVersion { get; set; }
+
+    /// <summary>
+    /// There was no settings file at all: the app has never run here. Not saved, since the
+    /// save is what makes it untrue.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsNew { get; private init; }
+
     /// <summary>Where the user last left the window; null until they move it.</summary>
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
@@ -52,10 +65,12 @@ public sealed class Settings
 
     public static Settings Load()
     {
+        // Only a missing file means a first run. A corrupt one means the app has been here
+        // before, so it is not the moment to hold back what is new.
+        if (!File.Exists(FilePath)) return new Settings { IsNew = true };
         try
         {
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
+            return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
         }
         catch { /* corrupt settings: start fresh */ }
         return new Settings();
