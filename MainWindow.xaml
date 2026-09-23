@@ -387,10 +387,10 @@
             <!-- The icon is where you look to ask what this is and which version of it, and
                  where Windows has always kept a window’s own menu. Clicking it opens ours,
                  which is the only way to reach it once there is no tray icon to right-click. -->
-            <Image x:Name="AppIcon" Grid.Column="0" Width="16" Height="16" Margin="8,0,8,0"
+            <Image x:Name="TitleBarIcon" Grid.Column="0" Width="16" Height="16" Margin="8,0,8,0"
                    VerticalAlignment="Center" Cursor="Hand"
                    Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"
-                   MouseLeftButtonUp="AppIcon_Click"
+                   MouseLeftButtonUp="TitleBarIcon_Click"
                    ToolTip="{Binding AppTooltip}"
                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
 

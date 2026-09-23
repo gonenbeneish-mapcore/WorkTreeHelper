@@ -87,7 +87,9 @@ exe sits, so a copy under `Program Files` will report that it cannot install its
 - **It sizes itself** to the list, capped to the monitor, and parks in the corner by the
   notification area until you move it — then it remembers where you put it.
 - **The pin** keeps the window above other windows, and survives a restart.
-- Hovering the title-bar icon says which version this is.
+- **The icon follows your theme**: a dark disc on a light taskbar, a pale one on a dark
+  taskbar, so it stays findable either way. Clicking it in the title bar opens the app’s
+  menu, and hovering it says which version this is.
 - WPF on .NET 10 with the Fluent theme, following the Windows light/dark setting live, and
   Per-Monitor V2 DPI aware. Built for Windows 11; on Windows 10 the title-bar colour and
   rounded corners simply do not apply.
@@ -103,6 +105,13 @@ build.cmd
 
 which is `dotnet publish` into `dist\WorktreeHelper.exe`, framework-dependent and single-file.
 For development, `dotnet run` or open `WorktreeHelper.csproj`.
+
+```powershell
+tools\make-icon.ps1
+```
+
+redraws `app.ico` and `app-dark.ico` — the two colourways — at every size the shell asks
+for. Drawn at each size rather than scaled down from one large bitmap, so 16px stays sharp.
 
 ```bat
 test.cmd
@@ -196,6 +205,7 @@ repository needs none of it.
 | `PullRequests.cs` | The open pull requests of the repository, by branch |
 | `UpdateService.cs` | Finds a newer GitHub release, and installs it over this copy |
 | `MonitorWorkArea.cs` | Work area of the monitor the window is on, for the auto-size cap |
+| `AppIcon.cs` | Picks the icon colourway that suits the theme, and builds the tray’s copy of it |
 | `Settings.cs` | JSON settings in `%APPDATA%` |
 | `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service and the link rewriting |
 

@@ -14,7 +14,7 @@
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Shown in Explorer's Properties/Details and by SmartScreen on an unsigned exe. -->
-    <Version>1.4.2</Version>
+    <Version>1.4.3</Version>
     <Product>Worktree Helper</Product>
     <AssemblyTitle>Worktree Helper</AssemblyTitle>
     <Description>Lists the worktrees of a git repository and opens them in VS Code, a terminal or Explorer.</Description>
@@ -32,6 +32,8 @@
     <!-- Also a Resource, not just the exe's icon: the caption is drawn by the app now,
          so the window has to be able to load it. -->
     <Resource Include="app.ico" />
+    <!-- The pale-disc colourway, for a dark theme. Only app.ico can be the exe's own icon. -->
+    <Resource Include="app-dark.ico" />
   </ItemGroup>
 
   <ItemGroup>

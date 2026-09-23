@@ -25,7 +25,11 @@ internal sealed class TrayIcon : IDisposable
     private NOTIFYICONDATA _data;
     private bool _disposed;
 
-    public TrayIcon(string tip)
+    /// <param name="icon">
+    /// The icon to show, at tray size. Ownership passes here: it is destroyed on
+    /// <see cref="SetIcon"/> and on <see cref="Dispose"/>.
+    /// </param>
+    public TrayIcon(string tip, IntPtr icon)
     {
         // Explorer broadcasts this if it restarts, and every tray icon has to re-add
         // itself when it does.
@@ -46,7 +50,7 @@ internal sealed class TrayIcon : IDisposable
             uID = TrayIconId,
             uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP,
             uCallbackMessage = CallbackMessage,
-            hIcon = LoadAppIcon(),
+            hIcon = icon,
             szTip = tip,
             szInfo = "",
             szInfoTitle = "",
@@ -60,6 +64,21 @@ internal sealed class TrayIcon : IDisposable
         if (!Shell_NotifyIcon(NIM_ADD, ref _data)) return;
         // Version 4 delivers the anchor point in wParam and the event in lParam.
         Shell_NotifyIcon(NIM_SETVERSION, ref _data);
+    }
+
+    /// <summary>
+    /// Swaps the icon, which is how the notification area follows a change of theme.
+    /// </summary>
+    public void SetIcon(IntPtr icon)
+    {
+        if (_disposed || icon == IntPtr.Zero || icon == _data.hIcon) return;
+
+        var old = _data.hIcon;
+        _data.hIcon = icon;
+        _data.uFlags = NIF_ICON;
+        Shell_NotifyIcon(NIM_MODIFY, ref _data);
+        _data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+        if (old != IntPtr.Zero) DestroyIcon(old);
     }
 
     public void SetTooltip(string tip)
@@ -95,21 +114,9 @@ internal sealed class TrayIcon : IDisposable
         return IntPtr.Zero;
     }
 
-    /// <summary>The app icon at tray size, from the executable's own icon resource.</summary>
-    private static IntPtr LoadAppIcon()
-    {
-        var cx = GetSystemMetrics(SM_CXSMICON);
-        var cy = GetSystemMetrics(SM_CYSMICON);
-
-        // The .NET SDK emits <ApplicationIcon> as icon group resource 32512.
-        var handle = LoadImage(GetModuleHandle(null), new IntPtr(32512), IMAGE_ICON, cx, cy, 0);
-        if (handle != IntPtr.Zero) return handle;
-
-        // Fall back to the first icon in the executable.
-        var path = Environment.ProcessPath;
-        if (path is not null && ExtractIconEx(path, 0, out _, out var small, 1) > 0) return small;
-        return IntPtr.Zero;
-    }
+    /// <summary>The size the notification area wants its icons at.</summary>
+    public static (int Width, int Height) IconSize
+        => (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
 
     public void Dispose()
     {
@@ -134,7 +141,6 @@ internal sealed class TrayIcon : IDisposable
     private const uint NOTIFYICON_VERSION_4 = 4;
 
     private const int SM_CXSMICON = 49, SM_CYSMICON = 50;
-    private const uint IMAGE_ICON = 1;
 
     private static readonly IntPtr HWND_MESSAGE = new(-3);
 
@@ -168,16 +174,8 @@ internal sealed class TrayIcon : IDisposable
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "LoadImageW")]
-    private static extern IntPtr LoadImage(IntPtr instance, IntPtr name, uint type, int cx, int cy, uint load);
-
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyIcon(IntPtr icon);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]
-    private static extern IntPtr GetModuleHandle(string? name);
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ExtractIconExW")]
-    private static extern int ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, int count);
 }

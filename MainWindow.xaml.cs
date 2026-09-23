@@ -322,7 +322,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Cheap, and it catches a switch between light and dark made while the window
             // was away: Windows repaints the body but leaves the caption as it was.
             TitleBar.Match(this);
-        TitleBar.Round(this);
+            TitleBar.Round(this);
+            ApplyIcon();
         };
         Deactivated += (_, _) => _deactivatedUtc = DateTime.UtcNow;
 
@@ -395,14 +396,45 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RestorePlacement();
         TitleBar.Match(this);
 
-        // A second launch broadcasts instead of starting a rival copy of the app.
+        ApplyIcon();
+
         if (PresentationSource.FromVisual(this) is HwndSource source)
             source.AddHook((IntPtr _, int msg, IntPtr _, IntPtr _, ref bool _) =>
             {
+                // A second launch broadcasts instead of starting a rival copy of the app.
                 if ((uint)msg == SingleInstance.ShowMessage) ShowFromTray();
+
+                // Windows announces a change of theme here. The icon has a colourway for
+                // each, and the tray icon has to be told even while the window is away,
+                // which is the whole reason this is a message hook and not the Activated
+                // handler above.
+                if (msg == WM_SETTINGCHANGE) Dispatcher.BeginInvoke(ApplyIcon);
+
                 return IntPtr.Zero;
             });
     }
+
+    /// <summary>Windows broadcasts this when a setting changes, the theme among them.</summary>
+    private const int WM_SETTINGCHANGE = 0x001A;
+
+    /// <summary>
+    /// Puts the colourway that suits the current theme on the title bar, the taskbar button
+    /// and the notification area. Cheap enough to call whenever it might have changed.
+    /// </summary>
+    private void ApplyIcon()
+    {
+        var dark = AppIcon.IsDark(this);
+        if (_iconIsDark == dark) return;
+        _iconIsDark = dark;
+
+        Icon = AppIcon.Image(this);
+
+        var (cx, cy) = TrayIcon.IconSize;
+        _tray?.SetIcon(AppIcon.CreateHandle(this, cx, cy));
+    }
+
+    /// <summary>Which colourway is up, so the work is skipped when nothing has changed.</summary>
+    private bool? _iconIsDark;
 
     // ---- Repo selection ----------------------------------------------------
 
@@ -877,7 +909,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         menu.Opacity = 1;
         menu.HorizontalOffset = 0;
         menu.VerticalOffset = 0;
-        menu.PlacementTarget = atPointer ? this : AppIcon;
+        menu.PlacementTarget = atPointer ? this : TitleBarIcon;
         menu.Placement = atPointer ? PlacementMode.MousePoint : PlacementMode.Bottom;
         menu.IsOpen = true;
     }
@@ -888,7 +920,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         e.Handled = true;
     }
 
-    private void AppIcon_Click(object sender, MouseButtonEventArgs e)
+    private void TitleBarIcon_Click(object sender, MouseButtonEventArgs e)
     {
         ShowAppMenu(atPointer: false);
         e.Handled = true;
@@ -1016,7 +1048,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        _tray = new TrayIcon(AppTooltip);
+        var (cx, cy) = TrayIcon.IconSize;
+        _tray = new TrayIcon(AppTooltip, AppIcon.CreateHandle(this, cx, cy));
         _tray.Clicked += ToggleWindow;
         _tray.ContextMenuRequested += ShowTrayMenu;
     }

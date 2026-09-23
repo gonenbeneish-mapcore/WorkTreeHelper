@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.3 — unreleased
+
+- The icon is a bonsai on a filled disc, and follows the Windows theme: a dark disc on a
+  light taskbar, a pale one on a dark taskbar. The old one was thin strokes on nothing, and
+  someone with poor sight could not find it — measured at 2.88:1 against a light taskbar,
+  under the 3:1 a graphic is meant to hold.
+- The disc leaves exactly one pixel of clearance at every size rather than a percentage,
+  which used to give away five pixels at 256 and a third of one at 16.
+
 ## v1.4.2
 
 - The taskbar and the notification area are now one home or the other: choosing the taskbar
