@@ -1,0 +1,64 @@
+<!-- The app's options. Every control is bound straight to the main window's own property for
+     it, so a change takes effect as it is made and the list behind the window moves with it;
+     there is no OK, and so nothing to lose by closing it. -->
+<Window x:Class="WorktreeHelper.OptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WorktreeHelper"
+        Title="Options"
+        Width="440" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
+
+    <Window.Resources>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <!-- What each choice does, under it rather than in a tooltip: an option nobody can
+             work out without hovering is an option nobody changes. -->
+        <Style x:Key="Explains" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="28,0,0,8"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="20,16,20,18">
+
+        <!-- Radio buttons in one panel are one group unless told otherwise, and the two
+             questions here are separate questions, so each pair is named. -->
+        <TextBlock Style="{StaticResource Heading}" Text="Where it lives"/>
+        <RadioButton GroupName="Home" Content="System tray"
+                     IsChecked="{Binding LivesInTaskbar, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="An icon in the notification area. Closing the window puts it away; Exit on the icon's menu quits."/>
+        <RadioButton GroupName="Home" Content="Taskbar"
+                     IsChecked="{Binding LivesInTaskbar}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="A taskbar button and an Alt+Tab entry, and no tray icon. Closing the window exits the app."/>
+
+        <TextBlock Style="{StaticResource Heading}" Text="Visual Studio" Margin="0,10,0,6"/>
+        <CheckBox Content="Allow a second Visual Studio on the same worktree"
+                  IsChecked="{Binding AllowSecondVisualStudio}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
+
+        <TextBlock Style="{StaticResource Heading}" Text="Buttons" Margin="0,10,0,6"/>
+        <RadioButton GroupName="Layout" Content="Packed"
+                     IsChecked="{Binding AlignColumns, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="Each row's buttons sit together, which keeps the window as small as it can be."/>
+        <RadioButton GroupName="Layout" Content="In columns"
+                     IsChecked="{Binding AlignColumns}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="Each kind of button keeps its own column down the list, with a gap in a row that has none."/>
+
+        <Button Content="Close" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="18,4"
+                IsDefault="True" IsCancel="True" Click="Close_Click"/>
+    </StackPanel>
+</Window>

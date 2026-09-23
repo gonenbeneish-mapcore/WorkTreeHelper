@@ -19,9 +19,14 @@
         duck-bubbles   spike/extra-bubbles         1 commit to push
         duck-quack     feature/teach-it-to-quack   3 files open, 2 commits to push
 
-    Two buttons cannot be demonstrated this way. `VS` wants a worktree carrying
-    CreateVS-2026.bat, and `PR` wants a real github.com remote with an open pull request —
-    which is the honest state for most repositories, and what the README's picture shows.
+    With -VisualStudio, duck-bath and duck-quack also carry a stand-in CreateVS-2026.bat, so
+    their rows get the VS button and the other two do not - which is what the "in columns"
+    layout needs rows to differ by. It is left out by default because the README's picture is
+    taken from this repository, and most repositories have no such script. The stand-in only
+    says what it is; there is no solution to generate.
+
+    PR cannot be demonstrated this way: it wants a real github.com remote with an open pull
+    request, which is the honest state for most repositories.
 
 .PARAMETER Root
     Where to build it. Inside the project by default, in a folder git ignores: a script has
@@ -29,11 +34,15 @@
     path is what the app shows in its title bar, so a screenshot reads better from somewhere
     shorter — the picture in the README was taken with -Root D:\git.
 
+.PARAMETER VisualStudio
+    Give two of the worktrees a stand-in Visual Studio script, so the VS button appears.
+
 .PARAMETER Remove
     Delete the three folders and build nothing.
 
 .EXAMPLE
     tools\make-demo-repo.ps1
+    tools\make-demo-repo.ps1 -VisualStudio
     tools\make-demo-repo.ps1 -Root C:\temp -Name duck-pond
     tools\make-demo-repo.ps1 -Remove
 
@@ -44,6 +53,7 @@
 param(
     [string]$Root = (Join-Path $PSScriptRoot "..\demo"),
     [string]$Name = "rubber-duck",
+    [switch]$VisualStudio,
     [switch]$Remove
 )
 
@@ -106,6 +116,17 @@ $bubbles = Join-Path $trees "duck-bubbles"
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'feature/teach-it-to-quack', $quack, 'main')
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'fix/sinks-in-the-bath', $bath, 'main')
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'spike/extra-bubbles', $bubbles, 'main')
+
+# Asked for, two of them carry the Visual Studio script, committed before anything is pushed
+# so the states below come out the same as without it.
+if ($VisualStudio) {
+    $standIn = "@echo off`r`necho This is the Worktree Helper demo repository. There is no solution to generate:`r`necho this file is here so the VS button has something to stand for.`r`npause`r`n"
+    foreach ($tree in @($quack, $bath)) {
+        Write-Text (Join-Path $tree "CreateVS-2026.bat") $standIn
+        Invoke-Git $tree @('add', '-A')
+        Invoke-Git $tree @('commit', '-qm', "Visual Studio, of a sort")
+    }
+}
 
 # quack: two commits not yet pushed, and three files still open
 Invoke-Git $quack @('push', '-q', '-u', 'origin', 'feature/teach-it-to-quack')

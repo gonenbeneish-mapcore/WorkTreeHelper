@@ -1,7 +1,14 @@
 # Changelog
 
-## v1.4.3 — unreleased
+## v1.5.0 — unreleased
 
+- **Options**, behind a gear in the title bar and on the app’s menu: where the app lives,
+  whether a second Visual Studio may be opened on the same worktree, and whether the buttons
+  are packed or kept in columns. Each applies as it is changed.
+- A second Visual Studio can be switched off: the row then only offers to bring back the
+  one that is open, rather than offering the other kind as well.
+- The buttons can be kept in columns, so each kind lines up down the list — every `PR`
+  in one column — with a gap in a row that has none.
 - The icon is a bonsai on a filled disc, and follows the Windows theme: a dark disc on a
   light taskbar, a pale one on a dark taskbar. The old one was thin strokes on nothing, and
   someone with poor sight could not find it — measured at 2.88:1 against a light taskbar,

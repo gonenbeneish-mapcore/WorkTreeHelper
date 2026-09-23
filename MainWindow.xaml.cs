@@ -272,6 +272,62 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ? "Close and exit the app (Alt+F4). Esc minimises."
         : "Close to the tray (Esc)";
 
+    // ---- Options -----------------------------------------------------------
+    //
+    // Each of these is bound two ways by the options window, and applies the moment it is
+    // changed: there is no OK to press, so there is nothing to forget to press.
+
+    /// <summary>Taskbar rather than the notification area. The same switch as the menu's.</summary>
+    public bool LivesInTaskbar
+    {
+        get => ShowInTaskbar;
+        set { if (value != ShowInTaskbar) ApplyShowInTaskbar(value); }
+    }
+
+    /// <summary>Whether a row may offer the other kind of Visual Studio once one is open.</summary>
+    public bool AllowSecondVisualStudio
+    {
+        get => _settings.AllowSecondVisualStudio;
+        set
+        {
+            if (_settings.AllowSecondVisualStudio == value) return;
+            _settings.AllowSecondVisualStudio = value;
+            _settings.Save();
+            foreach (var wt in Worktrees) wt.AllowSecondVisualStudio = value;
+            OnPropertyChanged(nameof(AllowSecondVisualStudio));
+            // One button more or fewer per row changes how wide the window wants to be.
+            AutoSize();
+        }
+    }
+
+    /// <summary>Whether each kind of button keeps its own column down the list.</summary>
+    public bool AlignColumns
+    {
+        get => _settings.AlignColumns;
+        set
+        {
+            if (_settings.AlignColumns == value) return;
+            _settings.AlignColumns = value;
+            _settings.Save();
+            OnPropertyChanged(nameof(AlignColumns));
+            OnPropertyChanged(nameof(PackButtons));
+            AutoSize();
+        }
+    }
+
+    /// <summary>
+    /// The other way up, for the row template: its buttons are a shared-size scope of their
+    /// own when they are packed, and part of the list's when they are aligned.
+    /// </summary>
+    public bool PackButtons => !AlignColumns;
+
+    private void Options_Click(object sender, RoutedEventArgs e)
+    {
+        // From the tray menu the window may be away, and the options belong to it.
+        if (!IsVisible || WindowState == WindowState.Minimized) ShowFromTray();
+        new OptionsWindow(this).ShowDialog();
+    }
+
     private const string AppName = "Worktree Helper";
 
     public MainWindow()
@@ -485,6 +541,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SetTrayIcon(!wanted);
         OnPropertyChanged(nameof(CloseHint));
+        OnPropertyChanged(nameof(LivesInTaskbar));
 
         TitleBar.Match(this);
         TitleBar.Round(this);
@@ -697,6 +754,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             if (existing >= 0) Worktrees.RemoveAt(existing);
+            incoming.AllowSecondVisualStudio = _settings.AllowSecondVisualStudio;
             Worktrees.Insert(i, incoming);
         }
     }

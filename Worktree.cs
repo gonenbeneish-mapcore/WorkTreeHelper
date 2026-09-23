@@ -192,8 +192,7 @@ public sealed class Worktree : INotifyPropertyChanged
             if (_isSolutionOpen == value) return;
             _isSolutionOpen = value;
             Raise(nameof(IsSolutionOpen));
-            Raise(nameof(IsOpenInVisualStudio));
-            Raise(nameof(ShowVisualStudioChooser));
+            RaiseVisualStudio();
         }
     }
 
@@ -206,9 +205,44 @@ public sealed class Worktree : INotifyPropertyChanged
             if (_isFolderOpen == value) return;
             _isFolderOpen = value;
             Raise(nameof(IsFolderOpen));
-            Raise(nameof(IsOpenInVisualStudio));
-            Raise(nameof(ShowVisualStudioChooser));
+            RaiseVisualStudio();
         }
+    }
+
+    private bool _allowSecondVisualStudio = true;
+
+    /// <summary>
+    /// Whether this row may offer the other kind of Visual Studio once one is open. Copied
+    /// from the setting onto every row, so the buttons can be worked out here.
+    /// </summary>
+    public bool AllowSecondVisualStudio
+    {
+        get => _allowSecondVisualStudio;
+        set
+        {
+            if (_allowSecondVisualStudio == value) return;
+            _allowSecondVisualStudio = value;
+            Raise(nameof(AllowSecondVisualStudio));
+            RaiseVisualStudio();
+        }
+    }
+
+    /// <summary>
+    /// The solution button. With a second instance allowed it stands beside the folder one
+    /// once either is open, focusing the solution or starting it; without, it only appears
+    /// when the solution is what is open, and then all it does is focus it.
+    /// </summary>
+    public bool ShowSolutionButton => AllowSecondVisualStudio ? IsOpenInVisualStudio : IsSolutionOpen;
+
+    /// <summary>The folder button, by the same rule as <see cref="ShowSolutionButton"/>.</summary>
+    public bool ShowFolderButton => AllowSecondVisualStudio ? IsOpenInVisualStudio : IsFolderOpen;
+
+    private void RaiseVisualStudio()
+    {
+        Raise(nameof(IsOpenInVisualStudio));
+        Raise(nameof(ShowVisualStudioChooser));
+        Raise(nameof(ShowSolutionButton));
+        Raise(nameof(ShowFolderButton));
     }
 
     /// <summary>

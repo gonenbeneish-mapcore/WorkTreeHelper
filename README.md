@@ -48,7 +48,18 @@ and either answer can be changed later.
 | Its menu | Right-click the icon: the worktrees, so one can be opened without the window appearing at all | Click the icon in the title bar, or right-click the title bar |
 | Closing the window | Puts it away; **Exit** on the menu quits | Quits the app. `Esc` minimises instead |
 
-To change your mind, open that menu and pick **Show in taskbar**. It applies straight away.
+To change your mind, open **Options** (the gear in the title bar, or on that menu). It applies
+straight away.
+
+## Options
+
+The gear in the title bar opens them; every change applies as you make it.
+
+| Option | Choices |
+|---|---|
+| **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
+| **A second Visual Studio** | **Allowed** (the default): once the solution or the folder is open, the row offers the other one too. **Not allowed**: it only offers to bring back the one that is open. |
+| **Buttons** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
 
 ## Install
 
@@ -128,7 +139,8 @@ tools\make-demo-repo.ps1
 builds `demo\rubber-duck`, which git ignores: a throwaway repository whose four worktrees
 are each left in a different state — clean, files open, commits to push, commits to pull —
 which is what the picture at the top of this file is of. Handy for trying a change against
-something other than your own work. `-Root` and `-Name` put it elsewhere, `-Remove` takes it
+something other than your own work. `-VisualStudio` gives two of the rows a stand-in Visual Studio
+script so the VS button shows, `-Root` and `-Name` put it elsewhere, and `-Remove` takes it
 away again.
 
 ## Symbolic links and junctions
@@ -193,6 +205,7 @@ repository needs none of it.
 | `SingleInstance.cs` | Mutex plus a broadcast that raises the copy already running |
 | `app.manifest` | PerMonitorV2 DPI awareness, long paths |
 | `MainWindow.xaml(.cs)` | UI and view logic |
+| `OptionsWindow.xaml(.cs)` | The options, bound straight to the main window’s own properties |
 | `TitleBar.cs` | Caption colour and rounded corners, via DWM |
 | `GitService.cs` | Runs and parses `git worktree list --porcelain` and `git status --porcelain=v2` |
 | `TrayIcon.cs` | The notification-area icon, straight through `Shell_NotifyIcon` |

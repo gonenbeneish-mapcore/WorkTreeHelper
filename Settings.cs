@@ -22,6 +22,24 @@ public sealed class Settings
     /// </summary>
     public bool AskedAboutTaskbar { get; set; }
 
+    /// <summary>
+    /// Whether a worktree may have both kinds of Visual Studio open at once, the generated
+    /// solution and the folder. On by default, which is how it always behaved: once one is
+    /// open the row offers the other. Off, the row only ever offers to focus what is open.
+    /// </summary>
+    /// <remarks>
+    /// The initialiser is what an older settings file gets, since it has no such key and the
+    /// deserialiser leaves an absent property at whatever the constructor made it.
+    /// </remarks>
+    public bool AllowSecondVisualStudio { get; set; } = true;
+
+    /// <summary>
+    /// Whether each kind of button keeps a column of its own down the list, leaving a gap
+    /// in a row that has no such button. Off by default: rows pack their buttons together,
+    /// which is as small as the window can be.
+    /// </summary>
+    public bool AlignColumns { get; set; }
+
     /// <summary>Where the user last left the window; null until they move it.</summary>
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
