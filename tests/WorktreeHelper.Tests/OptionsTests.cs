@@ -70,6 +70,33 @@ public class VisualStudioButtonTests
     }
 }
 
+public class SlotVisibilityTests
+{
+    private static System.Windows.Visibility Slot(params object[] values)
+        => (System.Windows.Visibility)SlotVisibility.Instance.Convert(values, typeof(object), null!, null!);
+
+    [Fact]
+    public void A_button_the_row_wants_is_drawn()
+        => Assert.Equal(System.Windows.Visibility.Visible, Slot(true, false));
+
+    [Fact]
+    public void Packed_a_missing_button_takes_no_room()
+        => Assert.Equal(System.Windows.Visibility.Collapsed, Slot(false, false));
+
+    [Fact]
+    public void In_columns_a_missing_button_keeps_its_place()
+        => Assert.Equal(System.Windows.Visibility.Hidden, Slot(false, true));
+
+    [Fact]
+    public void A_shared_slot_is_held_once_not_twice()
+    {
+        // The chooser and the solution button share a slot. With the solution button up, the
+        // chooser must not hold a place beside it, or that row would be one button wider.
+        Assert.Equal(System.Windows.Visibility.Collapsed, Slot(false, true, true));
+        Assert.Equal(System.Windows.Visibility.Hidden, Slot(false, true, false));
+    }
+}
+
 public class SettingsDefaultsTests
 {
     [Fact]

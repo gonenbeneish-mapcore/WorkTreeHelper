@@ -310,16 +310,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _settings.AlignColumns = value;
             _settings.Save();
             OnPropertyChanged(nameof(AlignColumns));
-            OnPropertyChanged(nameof(PackButtons));
+            UpdateHeldColumns();
             AutoSize();
         }
     }
 
-    /// <summary>
-    /// The other way up, for the row template: its buttons are a shared-size scope of their
-    /// own when they are packed, and part of the list's when they are aligned.
-    /// </summary>
-    public bool PackButtons => !AlignColumns;
+    // In columns, a button a row lacks keeps its place when some other row has one. These say
+    // which places are kept; the row template reads them through SlotVisibility.
+
+    private bool _holdVsColumn, _holdVsFolderColumn, _holdPrColumn;
+
+    public bool HoldVsColumn
+    {
+        get => _holdVsColumn;
+        private set => Set(ref _holdVsColumn, value);
+    }
+
+    public bool HoldVsFolderColumn
+    {
+        get => _holdVsFolderColumn;
+        private set => Set(ref _holdVsFolderColumn, value);
+    }
+
+    public bool HoldPrColumn
+    {
+        get => _holdPrColumn;
+        private set => Set(ref _holdPrColumn, value);
+    }
+
+    /// <summary>Works out again which columns are kept, from what every row is showing.</summary>
+    private void UpdateHeldColumns()
+    {
+        var align = AlignColumns;
+        HoldVsColumn = align && Worktrees.Any(w => w.ShowVisualStudioChooser || w.ShowSolutionButton);
+        HoldVsFolderColumn = align && Worktrees.Any(w => w.ShowFolderButton);
+        HoldPrColumn = align && Worktrees.Any(w => w.HasPullRequest);
+    }
+
+    /// <summary>A row's buttons changed, which may open or close a column for every row.</summary>
+    private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Worktree.ShowVisualStudioChooser) or nameof(Worktree.ShowSolutionButton)
+            or nameof(Worktree.ShowFolderButton) or nameof(Worktree.HasPullRequest))
+            UpdateHeldColumns();
+    }
 
     private void Options_Click(object sender, RoutedEventArgs e)
     {
@@ -341,6 +375,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => EditPath()), Key.L, ModifierKeys.Control));
         // The context-menu key, where every other window puts its menu.
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => ShowAppMenu(atPointer: false)), Key.Apps, ModifierKeys.None));
+
+        // Every row is watched for the buttons it shows, because in columns one row's PR is
+        // what keeps a PR column open for all the others.
+        Worktrees.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems is not null)
+                foreach (Worktree wt in e.OldItems) wt.PropertyChanged -= Row_PropertyChanged;
+            if (e.NewItems is not null)
+                foreach (Worktree wt in e.NewItems) wt.PropertyChanged += Row_PropertyChanged;
+            UpdateHeldColumns();
+        };
 
         IsPinned = _settings.Pinned;
         // Before the handle exists, which is the one place setting this costs nothing: WPF then

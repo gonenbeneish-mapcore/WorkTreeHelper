@@ -541,30 +541,21 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <!-- Actions. One column per kind of button, each in a shared-size
-                                     group of its own, which is what makes the layout option a single
-                                     switch rather than two templates.
+                                <!-- Actions. A StackPanel, which rounds each button's position in
+                                     turn, so identical buttons land on identical pixels in every row.
+                                     A Grid was tried for the columns layout and drifted: at 125% a
+                                     button is 32.5 physical pixels, and a stretched Grid spreads the
+                                     half-pixels differently by how many buttons a row has, which put
+                                     the widest row up to four pixels out.
 
-                                     The border around them is a shared-size scope or not, by the
-                                     setting. As a scope - packed, the default - the groups end at the
-                                     row, so a button a row lacks takes no room and the rest close up,
-                                     exactly as a row of buttons always did here. Not a scope, the
-                                     groups reach up to the list, so each column is as wide as the widest
-                                     row makes it: the PR buttons line up down the list, with a gap where
-                                     a row has none. A column no row uses is empty everywhere, so it
-                                     costs nothing. -->
-                                <Border Grid.Column="2"
-                                        Grid.IsSharedSizeScope="{Binding PackButtons, RelativeSource={RelativeSource AncestorType=Window}}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActCode"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActTerminal"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActExplorer"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActVs"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActVsFolder"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ActPr"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" Style="{StaticResource CodeButton}" Click="OpenCode_Click" Tag="{Binding Path}"
+                                     Columns come instead from holding a button's place. A button a row
+                                     lacks is hidden rather than collapsed when some other row has one
+                                     and the buttons are kept in columns, and because every button is
+                                     the same width, the next one lands where it would in a row that
+                                     has it. A column no row uses is collapsed everywhere and costs
+                                     nothing. -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button Style="{StaticResource CodeButton}" Click="OpenCode_Click" Tag="{Binding Path}"
                                             AutomationProperties.Name="Open in VS Code">
                                         <Grid>
                                             <TextBlock Text="&#xE943;" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -580,10 +571,10 @@
                                             </TextBlock>
                                         </Grid>
                                     </Button>
-                                    <Button Grid.Column="1" Style="{StaticResource TerminalButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
+                                    <Button Style="{StaticResource TerminalButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
                                             Content="&gt;_"
                                             AutomationProperties.Name="Open a terminal in this worktree"/>
-                                    <Button Grid.Column="2" Style="{StaticResource RowButton}" Click="OpenExplorer_Click" Tag="{Binding Path}"
+                                    <Button Style="{StaticResource RowButton}" Click="OpenExplorer_Click" Tag="{Binding Path}"
                                             Content="&#xE8B7;" ToolTip="Show this folder in File Explorer"
                                             AutomationProperties.Name="Show this folder in File Explorer"/>
                                     <!-- Only for worktrees that carry the script, so nothing shows here
@@ -593,28 +584,46 @@
                                          asks. Afterwards it gives way to one button per mode: the open one
                                          focuses its window, and the other - where a second instance is
                                          allowed - starts it without asking. The chooser and the solution
-                                         button share a column because they are never up together. -->
-                                    <Button Grid.Column="3" Style="{StaticResource VsChooserButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
-                                            Content="VS" AutomationProperties.Name="Open in Visual Studio"
-                                            Visibility="{Binding ShowVisualStudioChooser, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
-                                    <Button Grid.Column="3" Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
+                                         button share one slot because they are never up together, so it is
+                                         the chooser that holds the place when neither is. -->
+                                    <Button Style="{StaticResource VsChooserButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
+                                            Content="VS" AutomationProperties.Name="Open in Visual Studio">
+                                        <Button.Visibility>
+                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                <Binding Path="ShowVisualStudioChooser"/>
+                                                <Binding Path="HoldVsColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                <Binding Path="ShowSolutionButton"/>
+                                            </MultiBinding>
+                                        </Button.Visibility>
+                                    </Button>
+                                    <Button Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
                                             Content="VS" AutomationProperties.Name="The Visual Studio solution"
                                             Visibility="{Binding ShowSolutionButton, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
-                                    <Button Grid.Column="4" Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
+                                    <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
                                             AutomationProperties.Name="This worktree as a folder in Visual Studio"
-                                            Content="{StaticResource VsFolderIcon}"
-                                            Visibility="{Binding ShowFolderButton, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                            Content="{StaticResource VsFolderIcon}">
+                                        <Button.Visibility>
+                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                <Binding Path="ShowFolderButton"/>
+                                                <Binding Path="HoldVsFolderColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                            </MultiBinding>
+                                        </Button.Visibility>
+                                    </Button>
                                     <!-- Only where the branch has an open pull request. -->
-                                    <Button Grid.Column="5" Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
+                                    <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
                                             Tag="{Binding PullRequest}" Content="PR"
-                                            AutomationProperties.Name="Open the pull request"
-                                            Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                            AutomationProperties.Name="Open the pull request">
+                                        <Button.Visibility>
+                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                <Binding Path="HasPullRequest"/>
+                                                <Binding Path="HoldPrColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                            </MultiBinding>
+                                        </Button.Visibility>
                                         <Button.ToolTip>
                                             <TextBlock Text="{Binding PullRequestTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
                                         </Button.ToolTip>
                                     </Button>
-                                </Grid>
-                                </Border>
+                                </StackPanel>
                             </Grid>
                         </Border>
                     </DataTemplate>
