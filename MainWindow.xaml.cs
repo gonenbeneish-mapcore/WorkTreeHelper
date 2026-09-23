@@ -32,24 +32,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             if (!Set(ref _repoPath, value)) return;
             OnPropertyChanged(nameof(HasRepo));
-            OnPropertyChanged(nameof(ShowPathBox));
         }
     }
     public bool HasRepo => RepoPath.Length > 0;
-
-    private bool _isEditingPath;
-    /// <summary>The path box is open for typing, rather than hidden behind the caption.</summary>
-    public bool IsEditingPath
-    {
-        get => _isEditingPath;
-        private set { if (Set(ref _isEditingPath, value)) OnPropertyChanged(nameof(ShowPathBox)); }
-    }
-
-    /// <summary>
-    /// Whether to give the path box a row of its own. Once a repository is chosen the caption
-    /// shows its path, and the box is not needed again until that changes.
-    /// </summary>
-    public bool ShowPathBox => IsEditingPath;
 
     /// <summary>The repository folder's own name, for the tray tooltip.</summary>
     private string RepoName => Path.GetFileName(RepoPath.TrimEnd('\\', '/'));
@@ -269,7 +254,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// taskbar the window is the app and closing it exits.
     /// </summary>
     public string CloseHint => ShowInTaskbar
-        ? "Close and exit the app (Alt+F4). Esc minimises."
+        ? "Close and exit the app. Esc minimises."
         : "Close to the tray (Esc)";
 
     // ---- What's new ----------------------------------------------------------
@@ -427,6 +412,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UpdateHeldColumns();
     }
 
+    /// <summary>Opens a repository from a path typed in the options window.</summary>
+    public Task OpenRepositoryAsync(string path) => SetRepoAsync(path);
+
     private void Options_Click(object sender, RoutedEventArgs e)
     {
         // From the tray menu the window may be away, and the options belong to it.
@@ -441,12 +429,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
 
-        InputBindings.Add(new KeyBinding(new RelayCommand(_ => _ = RefreshOrCommitAsync()), Key.F5, ModifierKeys.None));
-        InputBindings.Add(new KeyBinding(new RelayCommand(_ => SelectFolder()), Key.O, ModifierKeys.Control));
+        // Escape is the one key the app answers to: everything else is a button, so there is
+        // nothing to learn and nothing to set off by accident.
         InputBindings.Add(new KeyBinding(new RelayCommand(_ => DismissWindow()), Key.Escape, ModifierKeys.None));
-        InputBindings.Add(new KeyBinding(new RelayCommand(_ => EditPath()), Key.L, ModifierKeys.Control));
-        // The context-menu key, where every other window puts its menu.
-        InputBindings.Add(new KeyBinding(new RelayCommand(_ => ShowAppMenu(atPointer: false)), Key.Apps, ModifierKeys.None));
 
         // Every row is watched for the buttons it shows, because in columns one row's PR is
         // what keeps a PR column open for all the others.
@@ -679,46 +664,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try { DragMove(); } catch (InvalidOperationException) { }
     }
 
-    /// <summary>Opens the path box and puts the caret in it, ready to be typed over.</summary>
-    private void EditPath()
-    {
-        IsEditingPath = true;
-        // The box is only in the tree once ShowPathBox has been applied.
-        Dispatcher.InvokeAsync(() =>
-        {
-            RepoPathBox.Focus();
-            RepoPathBox.SelectAll();
-        }, DispatcherPriority.Input);
-    }
-
-    private async Task CommitPathAsync(string text)
-    {
-        await SetRepoAsync(text);
-        // A path that was rejected stays on screen with the message, to be corrected.
-        if (HasRepo && !HasError) IsEditingPath = false;
-    }
-
-    private void RepoPathBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case Key.Enter:
-                e.Handled = true;
-                _ = CommitPathAsync(RepoPathBox.Text);
-                break;
-
-            // Escape abandons the edit rather than hiding the window: leaving it to the
-            // window's own binding would throw away what was typed and the window with it.
-            // With or without a repository loaded - the box is only ever there because
-            // Ctrl+L asked for it, so there is nothing to keep it open for.
-            case Key.Escape:
-                RepoPathBox.Text = RepoPath;
-                IsEditingPath = false;
-                e.Handled = true;
-                break;
-        }
-    }
-
     private void SelectFolder()
     {
         var dlg = new OpenFolderDialog
@@ -780,24 +725,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await RefreshAsync();
     }
 
-    private void Refresh_Click(object sender, RoutedEventArgs e) => _ = RefreshOrCommitAsync();
-
-    /// <summary>
-    /// Refreshing also commits a path typed into the box but not yet entered, so editing
-    /// the path and reaching for Refresh does what it looks like it does.
-    /// </summary>
-    private Task RefreshOrCommitAsync()
+    private void Refresh_Click(object sender, RoutedEventArgs e)
     {
         // Refresh is what someone presses when they want the app to go and look, so it asks
         // GitHub about a newer release as well. The automatic check is a daily one, which can
         // leave a release sitting unnoticed for most of a day. Not awaited: the worktrees are
         // what was asked for, and they should not wait on GitHub.
         _ = CheckForUpdateAsync();
-
-        var typed = ShowPathBox ? RepoPathBox.Text.Trim().Trim('"') : "";
-        return typed.Length > 0 && !string.Equals(typed, RepoPath, StringComparison.OrdinalIgnoreCase)
-            ? SetRepoAsync(typed)
-            : RefreshAsync();
+        _ = RefreshAsync();
     }
 
     private async Task RefreshAsync()
@@ -1063,10 +998,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     /// <remarks>
     /// In the taskbar there is no tray icon to right-click, and this is the only way to the
-    /// menu — including the item that hands the app back to the notification area. Three
+    /// menu — including the item that hands the app back to the notification area. Two
     /// ways in, because being unable to find it would strand someone in the taskbar: the
-    /// caption icon, which is where Windows has always kept a window’s menu; a right-click
-    /// anywhere on the caption; and the context-menu key.
+    /// caption icon, which is where Windows has always kept a window’s menu, and a
+    /// right-click anywhere on the caption.
     /// </remarks>
     private void ShowAppMenu(bool atPointer)
     {

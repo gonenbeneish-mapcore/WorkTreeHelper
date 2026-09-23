@@ -365,7 +365,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -398,8 +397,9 @@
             <!-- The path itself is the title, and nothing more: a press on it is a press on
                  the caption, so it moves the window like the rest of the bar. It used to open a
                  box to type a path into, which with a long path left almost nowhere to take
-                 hold of the window. The folder button chooses a folder; Ctrl+L still opens the
-                 box, for the one thing only typing can do - name a folder through a link.
+                 hold of the window. The folder button chooses a folder, and the path can be
+                 typed in the options instead, for the one thing only typing can do - name a
+                 folder through a symbolic link.
 
                  Capped, so a long path does not stretch the window to fit it; the whole of it
                  is a hover away. -->
@@ -431,10 +431,10 @@
                     </Button.ToolTip>
                 </Button>
                 <Button Style="{StaticResource RowButton}" Click="SelectFolder_Click"
-                        Content="&#xE838;" ToolTip="Select a folder inside a git repository (Ctrl+O)"
+                        Content="&#xE838;" ToolTip="Select a folder inside a git repository"
                         AutomationProperties.Name="Select folder"/>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
-                        Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh (F5)"
+                        Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh"
                         AutomationProperties.Name="Refresh"/>
                 <Button Style="{StaticResource RowButton}" Click="Options_Click"
                         Content="&#xE713;" ToolTip="Options"
@@ -447,23 +447,12 @@
             </StackPanel>
         </Grid>
 
-        <!-- Where a path is typed. Hidden once a repository is chosen, since the caption
-             shows it and nothing here is needed again until it changes. -->
-        <TextBox Grid.Row="1" x:Name="RepoPathBox" Margin="6,4,6,0"
-                 Height="28" MinHeight="28" Padding="8,0" FontSize="12"
-                 VerticalContentAlignment="Center"
-                 AutomationProperties.Name="Repository folder"
-                 Text="{Binding RepoPath, Mode=OneWay}"
-                 KeyDown="RepoPathBox_KeyDown"
-                 Visibility="{Binding ShowPathBox, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"
-                 ToolTip="Any folder inside a git repository or one of its worktrees. Type a path and press Enter, browse, or drop a folder on the window."/>
-
         <!-- Worktree list. No column headers: with one line per row, "WORKTREE" over the
              names and "BRANCH" over the branches only said what the rows already show. -->
         <!-- The folds under the title bar, one above the other: the first-run question, and
              what is new in this version. In practice they never meet - someone new is asked
              the question and has nothing to be told - but stacked, they could. -->
-        <StackPanel Grid.Row="2">
+        <StackPanel Grid.Row="1">
         <!-- Asked once, on the first run, and never again. The window is already on screen at
              that point, so this costs no dialog. -->
         <Border Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
@@ -562,7 +551,7 @@
         </Border>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="3" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="2" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Worktrees}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:Worktree}">
@@ -714,7 +703,7 @@
         <!-- Failures. The caption carries the status line and truncates it, which loses the
              part of a git error that says what went wrong; this appears only when there is
              something to read, so it costs no space the rest of the time. -->
-        <Border Grid.Row="4" Margin="6,0,6,6" Padding="8,6" CornerRadius="6"
+        <Border Grid.Row="3" Margin="6,0,6,6" Padding="8,6" CornerRadius="6"
                 Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
                 BorderBrush="{DynamicResource SystemFillColorCriticalBrush}" BorderThickness="1"
                 Visibility="{Binding HasError, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
@@ -735,7 +724,7 @@
         </Border>
 
         <!-- Empty state -->
-        <TextBlock Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+        <TextBlock Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxWidth="420"
                    Text="Press the folder button above, or drop a folder here, to list the worktrees of the git repository it is in."
                    Visibility="{Binding ShowEmptyHint, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
@@ -753,7 +742,7 @@
 
              The pointer resting on it stops the countdown — nothing should disappear
              from under someone who is reading it. -->
-        <Canvas Grid.Row="1" Grid.RowSpan="4" Panel.ZIndex="1">
+        <Canvas Grid.Row="1" Grid.RowSpan="3" Panel.ZIndex="1">
         <Border x:Name="UpdateToast" Canvas.Top="6" Canvas.Right="6"
                 Padding="12,9" CornerRadius="8" MaxWidth="420"
                 Background="{DynamicResource AccentFillColorDefaultBrush}"
@@ -782,7 +771,7 @@
 
         <!-- Drop target. Last child so it covers the rest, and hit-testing nothing so the
              drag still reaches the window underneath it. -->
-        <Grid Grid.Row="0" Grid.RowSpan="5" IsHitTestVisible="False"
+        <Grid Grid.Row="0" Grid.RowSpan="4" IsHitTestVisible="False"
               Visibility="{Binding IsDragOver, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
             <Border Opacity="0.12" Background="{DynamicResource AccentFillColorDefaultBrush}"/>
             <Border BorderThickness="2" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"/>

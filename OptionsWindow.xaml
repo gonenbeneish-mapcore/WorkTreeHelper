@@ -30,9 +30,35 @@
 
     <StackPanel Margin="20,16,20,18">
 
+        <!-- The repository, as a path that can be typed. The folder button in the title bar
+             is the usual way to choose one, but a folder picker resolves symbolic links and
+             junctions, so it can only ever hand back the target; typing is the way to open
+             a repository through the link itself. Open, rather than Enter: Escape is the one
+             key the app answers to. -->
+        <TextBlock Style="{StaticResource Heading}" Text="Repository"/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="PathBox" Text="{Binding RepoPath, Mode=OneWay}" FontSize="12"
+                     VerticalContentAlignment="Center"
+                     AutomationProperties.Name="Repository path"/>
+            <Button x:Name="OpenButton" Grid.Column="1" Content="Open" Margin="8,0,0,0" Padding="14,4"
+                    Click="Open_Click" AutomationProperties.Name="Open this repository"/>
+        </Grid>
+        <TextBlock Style="{StaticResource Explains}" Margin="0,6,0,4"
+                   Text="Any folder inside a git repository. Type the path to open one through a symbolic link: the folder button always follows a link to where it points."/>
+        <!-- What went wrong with the last path, if anything did. It is the main window's own
+             message, so it reads the same here as in the bar under the list. -->
+        <TextBlock Text="{Binding Error}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                   Visibility="{Binding HasError, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+
+
         <!-- Radio buttons in one panel are one group unless told otherwise, and the two
              questions here are separate questions, so each pair is named. -->
-        <TextBlock Style="{StaticResource Heading}" Text="Where it lives"/>
+        <TextBlock Style="{StaticResource Heading}" Text="Where it lives" Margin="0,10,0,6"/>
         <RadioButton GroupName="Home" Content="System tray"
                      IsChecked="{Binding LivesInTaskbar, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
         <TextBlock Style="{StaticResource Explains}"
@@ -59,6 +85,6 @@
                    Text="Each kind of button keeps its own column down the list, with a gap in a row that has none."/>
 
         <Button Content="Close" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="18,4"
-                IsDefault="True" IsCancel="True" Click="Close_Click"/>
+                IsCancel="True" Click="Close_Click"/>
     </StackPanel>
 </Window>

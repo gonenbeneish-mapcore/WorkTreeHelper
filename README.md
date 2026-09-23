@@ -33,8 +33,7 @@ so this is a first-run thing.
 | `PR` | The open **pull request** for that branch, in your browser. Only on branches that have one. |
 
 **Right-click a row** for the same things plus **Copy path** and **Copy branch name**. Hovering a
-row shows its full path, and hovering the counts says what they mean in words. `F5` re-reads
-everything.
+row shows its full path, and hovering the counts says what they mean in words.
 
 ## Where it lives
 
@@ -57,6 +56,7 @@ The gear in the title bar opens them; every change applies as you make it.
 
 | Option | Choices |
 |---|---|
+| **Repository** | The path of the one listed, which can be typed — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
 | **A second Visual Studio** | **Allowed** (the default): once the solution or the folder is open, the row offers the other one too. **Not allowed**: it only offers to bring back the one that is open. |
 | **Buttons** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
@@ -146,7 +146,7 @@ away again.
 ## Symbolic links and junctions
 
 A folder reached through a link has two names — `C:\git\repo` may be a link to `D:\git\repo` —
-and git always reports the target. Typing the path (`Ctrl+L`) is the way to pick the link itself, because
+and git always reports the target. Typing the path, in **Options**, is the way to pick the link itself, because
 the folder browser resolves links and can only ever hand back the target. When the chosen folder
 is reached through one, the worktree paths are rewritten back through it
 ([`LinkPaths.cs`](LinkPaths.cs)), so the list and everything the buttons launch use the name you

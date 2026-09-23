@@ -8,6 +8,8 @@
 - A clearer icon: a bonsai on a filled disc, pale or dark to suit the Windows theme.
 - What’s new is shown once, on the first run after an update.
 - The path in the title bar drags the window like the rest of it; the folder button picks one.
+- The path can be typed in Options instead, for opening a repository through a symbolic link.
+- Keyboard shortcuts are gone apart from Esc; everything else is a button.
 
 ## v1.4.2
 
