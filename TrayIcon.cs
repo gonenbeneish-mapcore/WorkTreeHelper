@@ -35,11 +35,15 @@ internal sealed class TrayIcon : IDisposable
         // itself when it does.
         _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
 
-        // A message-only window purely to receive the icon's callbacks.
+        // A hidden window purely to receive the icon's callbacks. Top-level rather than
+        // message-only, because message-only windows are left out of broadcasts, and
+        // TaskbarCreated is one: the icon would never come back after Explorer restarts.
+        // A tool window, so that even if something did show it, it would not take a
+        // taskbar button.
         _source = new HwndSource(new HwndSourceParameters("WorktreeHelperTray")
         {
-            ParentWindow = HWND_MESSAGE,
             WindowStyle = 0,
+            ExtendedWindowStyle = WS_EX_TOOLWINDOW,
         });
         _source.AddHook(WndProc);
 
@@ -142,7 +146,7 @@ internal sealed class TrayIcon : IDisposable
 
     private const int SM_CXSMICON = 49, SM_CYSMICON = 50;
 
-    private static readonly IntPtr HWND_MESSAGE = new(-3);
+    private const int WS_EX_TOOLWINDOW = 0x80;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NOTIFYICONDATA

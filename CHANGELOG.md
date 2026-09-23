@@ -11,6 +11,14 @@
 - The repository is chosen in Options: Browse, or type a path to open one through a link.
 - With no repository to show, the app starts with Options open.
 - Keyboard shortcuts are gone apart from Esc; everything else is a button.
+- Fixed: the tray icon comes back after Explorer restarts.
+- Fixed: choosing the taskbar from the tray menu with the window away shows the window.
+- Fixed: an update check that could not reach GitHub no longer hides an update already found.
+- Fixed: pull request buttons stay put when GitHub cannot be reached.
+- Fixed: if the updated copy will not start, this one keeps its tray icon.
+- Fixed: the row menu's Visual Studio item follows the one-instance option and focuses what is open.
+- Fixed: a repository folder that was deleted is reported as such, not as git missing.
+- Fixed: Options opens once, even when asked for again from the tray menu.
 
 ## v1.4.2
 

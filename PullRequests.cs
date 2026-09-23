@@ -39,7 +39,11 @@ internal static class PullRequests
     }
 
     /// <summary>Open pull requests by the branch each one comes from.</summary>
-    public static async Task<Dictionary<string, PullRequest>> OpenByBranchAsync(string repoPath, CancellationToken ct = default)
+    /// <returns>
+    /// Empty for a repository that is not on GitHub; null when it is but could not be asked,
+    /// so a caller can keep what an earlier answer said.
+    /// </returns>
+    public static async Task<Dictionary<string, PullRequest>?> OpenByBranchAsync(string repoPath, CancellationToken ct = default)
     {
         try
         {
@@ -54,7 +58,7 @@ internal static class PullRequests
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode) return Empty();
+            if (!response.IsSuccessStatusCode) return null;
 
             return Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
         }
@@ -64,8 +68,8 @@ internal static class PullRequests
         }
         catch (Exception)
         {
-            // Not GitHub, not reachable, not permitted: no pull requests to show.
-            return Empty();
+            // Not reachable, not permitted: no answer this time.
+            return null;
         }
     }
 

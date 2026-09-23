@@ -1,3 +1,4 @@
+using System.IO;
 using WorktreeHelper;
 using Xunit;
 
@@ -149,4 +150,15 @@ public class ParseStatusTests
     [Fact]
     public void Header_lines_are_never_counted_as_changes()
         => Assert.Equal(0, GitService.ParseStatus("# branch.oid abc\n# branch.head main\n").Changes);
+}
+
+public class MissingFolderTests
+{
+    [Fact]
+    public async Task A_folder_that_has_gone_is_not_reported_as_git_missing()
+    {
+        var gone = Path.Combine(Path.GetTempPath(), "WorktreeHelper.Tests." + Guid.NewGuid().ToString("N"));
+        var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(() => GitService.ListWorktreesAsync(gone));
+        Assert.Contains(gone, ex.Message);
+    }
 }

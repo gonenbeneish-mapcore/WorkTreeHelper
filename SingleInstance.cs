@@ -28,9 +28,9 @@ internal static class SingleInstance
 
     /// <summary>Asks the copy that is already running to show its window.</summary>
     /// <remarks>
-    /// A broadcast rather than a direct post: the running copy's tray window is
-    /// message-only and so cannot be found by enumeration, but its main window is an
-    /// ordinary top-level window and receives broadcasts even while hidden.
+    /// A broadcast rather than a direct post: there is no telling which of the running
+    /// copy's windows would be found by looking, but its main window is an ordinary
+    /// top-level window and receives broadcasts even while hidden.
     /// </remarks>
     public static void SignalExistingInstance()
         => PostMessage(HWND_BROADCAST, ShowMessage, IntPtr.Zero, IntPtr.Zero);

@@ -43,21 +43,22 @@ internal static class UpdateService
     }
 
     /// <summary>
-    /// The latest release if it is newer than this copy, or null — including when there is no
-    /// network, which is not worth telling anyone about.
+    /// The latest release if it is newer than this copy. Answered is false when GitHub could
+    /// not be asked — no network, rate-limited — which is not worth telling anyone about, but
+    /// is not the same as hearing that there is nothing new.
     /// </summary>
-    public static async Task<ReleaseInfo?> CheckAsync(CancellationToken ct = default)
+    public static async Task<(bool Answered, ReleaseInfo? Release)> CheckAsync(CancellationToken ct = default)
     {
         try
         {
             var json = await Http.GetStringAsync(LatestRelease, ct).ConfigureAwait(false);
             var release = ParseRelease(json);
-            return release is not null && release.Version > Current ? release : null;
+            return (true, release is not null && release.Version > Current ? release : null);
         }
         catch (Exception)
         {
-            // Offline, rate-limited, or the shape changed: there is simply no update today.
-            return null;
+            // Offline, rate-limited, or the shape changed: no answer today.
+            return (false, null);
         }
     }
 

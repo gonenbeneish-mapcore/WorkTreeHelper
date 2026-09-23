@@ -417,11 +417,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Options_Click(object sender, RoutedEventArgs e) => ShowOptions();
 
+    /// <summary>The options window while it is open, so the tray menu cannot open another.</summary>
+    private OptionsWindow? _options;
+
     private void ShowOptions()
     {
         // From the tray menu the window may be away, and the options belong to it.
         if (!IsVisible || WindowState == WindowState.Minimized) ShowFromTray();
-        new OptionsWindow(this).ShowDialog();
+
+        // The tray menu still works while Options is up, being a window of its own.
+        if (_options is not null)
+        {
+            _options.Activate();
+            return;
+        }
+
+        _options = new OptionsWindow(this);
+        try { _options.ShowDialog(); }
+        finally { _options = null; }
 
         // The options ask where the app lives, so once they have been open the first-run
         // card asking the same thing has nothing left to ask. Answered by leaving it as it
@@ -663,6 +676,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CloseHint));
         OnPropertyChanged(nameof(LivesInTaskbar));
 
+        // Asked from the tray menu with the window put away, the tray icon just went and a
+        // hidden window has no taskbar button: without this, the app would be nowhere at all.
+        if (wanted && !IsVisible) ShowFromTray();
+
         TitleBar.Match(this);
         TitleBar.Round(this);
         Topmost = true;
@@ -789,7 +806,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Worktrees.Clear();
             HasWorktrees = false;
-            Fail(ex is GitNotFoundException ? ex.Message : $"git error: {ex.Message}");
+            Fail(ex is GitNotFoundException or DirectoryNotFoundException ? ex.Message : $"git error: {ex.Message}");
         }
         finally
         {
@@ -854,7 +871,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task CheckForUpdateAsync()
     {
         if (IsUpdating) return;
-        Update = await UpdateService.CheckAsync();
+        var (answered, release) = await UpdateService.CheckAsync();
+
+        // Offline or rate-limited says nothing about the release already found, and an
+        // install that started meanwhile is using it.
+        if (!answered || IsUpdating) return;
+        Update = release;
         AnnounceUpdate();
     }
 
@@ -948,7 +970,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ReleaseTray();
             SingleInstance.Release();
 
-            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            try
+            {
+                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            }
+            catch
+            {
+                // Nothing took over, so this copy carries on as it was: in the tray if it
+                // lives there, and still the only one running.
+                SingleInstance.TryAcquire();
+                SetTrayIcon(!ShowInTaskbar);
+                throw;
+            }
             Application.Current.Shutdown();
         }
         catch (Exception ex)
@@ -1256,8 +1289,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var targets = Worktrees.Where(w => w.Branch.Length > 0).ToList();
         if (targets.Count == 0) return;
 
+        // Null when GitHub could not be asked, which leaves the buttons as they were rather
+        // than taking them all away until it can.
         var open = await PullRequests.OpenByBranchAsync(RepoPath, ct);
-        if (ct.IsCancellationRequested) return;
+        if (open is null || ct.IsCancellationRequested) return;
 
         foreach (var worktree in targets)
             worktree.PullRequest = open.GetValueOrDefault(worktree.Branch);
@@ -1458,7 +1493,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Row context menu: the actions the buttons offer, plus the ones they cannot.
     private void MenuOpenCode_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenVsCode(wt.Path));
     private void MenuOpenVisualStudio_Click(object sender, RoutedEventArgs e)
-        => WithWorktree(sender, wt => AskHowToOpenVisualStudio(wt.Path, anchor: null));
+        => WithWorktree(sender, wt =>
+        {
+            // With one instance allowed, the row only offers to focus what is open, and so
+            // does this: the menu is no way round the option.
+            if (!wt.AllowSecondVisualStudio && wt.IsOpenInVisualStudio)
+                _ = ReachVisualStudioAsync(wt.Path, wt.IsSolutionOpen ? VisualStudioMode.Solution : VisualStudioMode.Folder);
+            else
+                AskHowToOpenVisualStudio(wt.Path, anchor: null);
+        });
     private void MenuOpenTerminal_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenTerminal, wt.Path, "terminal"));
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
     private void MenuCopyPath_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Path, "path"));
@@ -1617,14 +1660,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             $"Generate the solution and open it  ({Launcher.VisualStudioScript})",
             "Runs the script, which generates the solution and opens it. This is the Windows build.",
             FindResource("VsSolutionIcon"),
-            () => RunVisualStudioScript(folder),
+            // Focused if it turns out to be open already, rather than generated over it.
+            () => _ = ReachVisualStudioAsync(folder, VisualStudioMode.Solution),
             preferred: true));
 
         menu.Items.Add(Choice(
             "Open this folder in Visual Studio",
             "Opens the worktree as a folder, for the builds configured through CMake.",
             FindResource("VsFolderIcon"),
-            () => OpenFolderInVisualStudio(folder)));
+            () => _ = ReachVisualStudioAsync(folder, VisualStudioMode.Folder)));
 
         menu.IsOpen = true;
 

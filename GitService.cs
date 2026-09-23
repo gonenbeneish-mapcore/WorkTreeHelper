@@ -161,6 +161,11 @@ public static class GitService
 
     private static async Task<string> RunGitAsync(string workingDir, string args, CancellationToken ct)
     {
+        // Process.Start fails the same way for a missing folder as for a missing git, and
+        // that would send someone off to reinstall git over a folder that was deleted.
+        if (!Directory.Exists(workingDir))
+            throw new DirectoryNotFoundException($"The folder is no longer there: {workingDir}");
+
         var psi = new ProcessStartInfo
         {
             FileName = "git",
