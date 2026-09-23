@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.5.0 — unreleased
+## v1.5.0
 
 - **Options**, behind a gear in the title bar and on the app’s menu; each applies at once.
 - A second Visual Studio on the same worktree can be switched off.

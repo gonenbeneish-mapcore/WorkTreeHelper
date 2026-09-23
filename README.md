@@ -54,6 +54,8 @@ straight away.
 
 The gear in the title bar opens them; every change applies as you make it.
 
+![The Options window: the repository's path with Browse and Open, where the app lives, whether a second Visual Studio is allowed, and how the buttons are laid out](docs/options.png)
+
 | Option | Choices |
 |---|---|
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
@@ -128,8 +130,8 @@ for. Drawn at each size rather than scaled down from one large bitmap, so 16px s
 test.cmd
 ```
 
-covers the parsers, the update service and the symbolic-link rewriting — the places the bugs
-actually were. The link tests build junctions in `%TEMP%`, which needs no elevation; where even
+covers the parsers, the update service, the symbolic-link rewriting, the options, what's new and
+the icon's frame picking — the places the bugs actually were. The link tests build junctions in `%TEMP%`, which needs no elevation; where even
 that is refused they assert nothing rather than failing on the environment.
 
 ```powershell
@@ -170,7 +172,9 @@ While nothing has the worktree open, one button asks which way in is wanted:
 
 Once either way is open, that single button becomes one per way: the open one tints and focuses
 its window, the other starts the second instance with no further asking. Two instances on one
-worktree — the Windows solution and the folder — is a supported way to work.
+worktree — the Windows solution and the folder — is a supported way to work. With **a second
+Visual Studio** turned off in Options, only the open one's button stays, and all it does is
+bring that window forward.
 
 Which is which comes from the **Running Object Table** rather than window titles: every worktree
 generates a solution of the same name, so the captions are identical, and a custom title template
@@ -220,7 +224,9 @@ repository needs none of it.
 | `MonitorWorkArea.cs` | Work area of the monitor the window is on, for the auto-size cap |
 | `AppIcon.cs` | Picks the icon colourway that suits the theme, and builds the tray’s copy of it |
 | `Settings.cs` | JSON settings in `%APPDATA%` |
-| `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service and the link rewriting |
+| `WhatsNew.cs` | Reads the changelog compiled into the exe, for the first run of a new version |
+| `SlotVisibility.cs` | Whether a row's button shows, holds its column open, or takes no room |
+| `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service, the link rewriting and the options |
 
 ## License
 
