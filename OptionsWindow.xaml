@@ -59,14 +59,19 @@
 
 
         <!-- Radio buttons in one panel are one group unless told otherwise, and the two
-             questions here are separate questions, so each pair is named. -->
+             questions here are separate questions, so each pair is named.
+
+             Each button only shows the setting, and says what it wants through Checked. Bound
+             both ways, a pair on one setting writes back to it while the group is unchecking
+             the other button, which then writes the opposite: once an earlier Options window
+             was still listening as well, that went round until the stack ran out. -->
         <TextBlock Style="{StaticResource Heading}" Text="Where it lives" Margin="0,10,0,6"/>
-        <RadioButton GroupName="Home" Content="System tray"
-                     IsChecked="{Binding LivesInTaskbar, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+        <RadioButton GroupName="Home" Content="System tray" Checked="Tray_Checked"
+                     IsChecked="{Binding LivesInTaskbar, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
         <TextBlock Style="{StaticResource Explains}"
                    Text="An icon in the notification area. Closing the window puts it away; Exit on the icon's menu quits."/>
-        <RadioButton GroupName="Home" Content="Taskbar"
-                     IsChecked="{Binding LivesInTaskbar}"/>
+        <RadioButton GroupName="Home" Content="Taskbar" Checked="Taskbar_Checked"
+                     IsChecked="{Binding LivesInTaskbar, Mode=OneWay}"/>
         <TextBlock Style="{StaticResource Explains}"
                    Text="A taskbar button and an Alt+Tab entry, and no tray icon. Closing the window exits the app."/>
 
@@ -77,12 +82,12 @@
                    Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
 
         <TextBlock Style="{StaticResource Heading}" Text="Buttons" Margin="0,10,0,6"/>
-        <RadioButton GroupName="Layout" Content="Packed"
-                     IsChecked="{Binding AlignColumns, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+        <RadioButton GroupName="Layout" Content="Packed" Checked="Packed_Checked"
+                     IsChecked="{Binding AlignColumns, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
         <TextBlock Style="{StaticResource Explains}"
                    Text="Each row's buttons sit together, which keeps the window as small as it can be."/>
-        <RadioButton GroupName="Layout" Content="In columns"
-                     IsChecked="{Binding AlignColumns}"/>
+        <RadioButton GroupName="Layout" Content="In columns" Checked="Columns_Checked"
+                     IsChecked="{Binding AlignColumns, Mode=OneWay}"/>
         <TextBlock Style="{StaticResource Explains}"
                    Text="Each kind of button keeps its own column down the list, with a gap in a row that has none."/>
 

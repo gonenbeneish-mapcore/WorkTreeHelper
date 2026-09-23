@@ -27,7 +27,22 @@ public partial class OptionsWindow : Window
         TitleBar.Match(this);
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        // A closed window can outlive its closing by a long way, and while it holds the main
+        // window as its data it is still bound to every option, answering each change.
+        DataContext = null;
+        base.OnClosed(e);
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    // Checked also fires when the binding ticks a button to show the setting; the properties
+    // ignore a value they already hold, so that costs nothing.
+    private void Tray_Checked(object sender, RoutedEventArgs e) => _owner.LivesInTaskbar = false;
+    private void Taskbar_Checked(object sender, RoutedEventArgs e) => _owner.LivesInTaskbar = true;
+    private void Packed_Checked(object sender, RoutedEventArgs e) => _owner.AlignColumns = false;
+    private void Columns_Checked(object sender, RoutedEventArgs e) => _owner.AlignColumns = true;
 
     private void Browse_Click(object sender, RoutedEventArgs e) => _owner.BrowseForRepository(this);
 
