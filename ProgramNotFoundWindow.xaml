@@ -1,0 +1,39 @@
+<!-- Says a button's program is not on this computer, and offers to find it. The app's own
+     window rather than a MessageBox: that one is drawn by Windows in its classic colours,
+     white in a dark app, and its buttons can only say OK or Yes, never what they do. -->
+<Window x:Class="WorktreeHelper.ProgramNotFoundWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="420" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
+
+    <StackPanel Margin="20,16,20,18">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <!-- The same mark the main window's error bar carries. -->
+            <TextBlock Text="&#xE783;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="22"
+                       VerticalAlignment="Top" Margin="0,2,14,0"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+            <StackPanel Grid.Column="1">
+                <TextBlock x:Name="Headline" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="Detail" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Locate first and filled, as the way forward; Cancel is what Escape does.
+             DynamicResource for the accent style, so a theme without it falls back to the
+             plain button rather than failing to load the window. -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="LocateButton" Padding="18,4" IsDefault="True" Click="Locate_Click"
+                    Style="{DynamicResource AccentButtonStyle}"/>
+            <Button Content="Cancel" Padding="18,4" Margin="8,0,0,0" IsCancel="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

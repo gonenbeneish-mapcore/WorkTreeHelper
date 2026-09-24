@@ -22,17 +22,20 @@ commits not yet pushed or pulled. **A quiet row means nothing is waiting in it.*
 pick the folder, or drag it onto the window. Any folder inside the project will do; it finds
 the rest by itself. It remembers, so this is a first-run thing.
 
-**Open one.** The buttons at the right of each row, in order:
+**Open one.** The buttons at the right of each row, in order, each showing the icon of what it
+opens. A short accent bar under one means that window is already open.
 
 | Button | Opens |
 |---|---|
-| `{}` | **VS Code.** Double-clicking the row does the same. Highlighted when that folder is already open — then it brings that window forward rather than opening a second one. |
-| terminal | A **terminal** in that folder. |
-| folder | That folder in **File Explorer**. |
-| `VS` | **Visual Studio** — only appears for projects set up for it, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). |
-| `PR` | The open **pull request** for that branch, in your browser. Only on branches that have one. |
+| VS Code | **VS Code.** Double-clicking the row does the same. Marked when that folder is already open — then it brings that window forward rather than opening a second one. |
+| Terminal | A **terminal** in that folder: Windows Terminal, or PowerShell without it. |
+| Explorer | That folder in **File Explorer**. |
+| Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
+| Visual Studio | **Visual Studio** — only appears for projects set up for it, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
+| GitHub | The open **pull request** for that branch, in your browser. Only on branches that have one. |
 
-**Right-click a row** for the same things plus **Copy path** and **Copy branch name**. Hovering a
+Any of them can be turned off in **Options**. **Right-click a row** for the same things, turned
+off or not, plus **Copy path** and **Copy branch name**. Hovering a
 row shows its full path, and hovering the counts says what they mean in words.
 
 ## Where it lives
@@ -61,7 +64,8 @@ The gear in the title bar opens them; every change applies as you make it.
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
 | **A second Visual Studio** | **Allowed** (the default): once the solution or the folder is open, the row offers the other one too. **Not allowed**: it only offers to bring back the one that is open. |
-| **Buttons** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
+| **Buttons** | Which buttons the rows carry; all of them by default. VS Code, Git Extensions and Visual Studio are unticked on a computer that does not have them, and ticking one then offers to find its `.exe` yourself, which is remembered. |
+| **Layout** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
 
 ## Install
 
@@ -76,8 +80,9 @@ It needs:
 | **`git` on PATH** | Every listing is `git worktree list` / `git status` under the hood. |
 | Windows 10 or 11, x64 | Published `win-x64`. |
 
-VS Code and Windows Terminal are optional — those buttons fall back to `code` on PATH and to
-PowerShell. The exe is unsigned, so Windows shows a SmartScreen prompt the first time
+VS Code, Git Extensions and Visual Studio are optional — a button whose program is missing does
+not appear, and one installed somewhere unusual can be pointed at in Options. The terminal
+button falls back to PowerShell without Windows Terminal. The exe is unsigned, so Windows shows a SmartScreen prompt the first time
 (**More info** → **Run anyway**).
 
 ## Updating
@@ -215,7 +220,8 @@ repository needs none of it.
 | `TrayIcon.cs` | The notification-area icon, straight through `Shell_NotifyIcon` |
 | `PopupPlacement.cs` | Puts the tray menu on the cursor and gives it the foreground |
 | `LinkPaths.cs` | Rewrites git's paths back through the symbolic link you picked |
-| `Launcher.cs` | Opens VS Code / terminal / Explorer / the Visual Studio script |
+| `Launcher.cs` | Finds and opens VS Code / terminal / Explorer / Git Extensions / the Visual Studio script |
+| `ExternalTool.cs` | A program a button opens: where it is, and whether its button is up |
 | `VsCodeWindows.cs` | Finds and focuses the VS Code window that has a worktree open |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |
 | `VisualStudioInstance.cs` | One instance: what it has open, and which of the two ways |

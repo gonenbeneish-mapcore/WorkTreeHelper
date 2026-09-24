@@ -1,4 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using Microsoft.Win32;
 
 namespace WorktreeHelper;
 
@@ -45,6 +49,54 @@ public partial class OptionsWindow : Window
     private void Columns_Checked(object sender, RoutedEventArgs e) => _owner.AlignColumns = true;
 
     private void Browse_Click(object sender, RoutedEventArgs e) => _owner.BrowseForRepository(this);
+
+    /// <summary>
+    /// A button that opens a program, ticked or unticked. Ticking one whose program is not on
+    /// this computer offers to find the exe; declined, the box goes back to unticked.
+    /// </summary>
+    private async void Tool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { Tag: ExternalTool tool } box) return;
+
+        if (box.IsChecked != true)
+        {
+            tool.Wanted = false;
+            return;
+        }
+
+        box.IsEnabled = false;
+        try
+        {
+            // A fresh look first: it may have been installed since, or the first look at
+            // startup may not have finished.
+            await _owner.LocateToolsAsync();
+            if (tool.Found || LocateByHand(tool)) tool.Wanted = true;
+        }
+        finally
+        {
+            box.IsEnabled = true;
+            // The click ticked the box itself; this puts back whatever is true now, which is
+            // unticked when the program was not found.
+            BindingOperations.GetBindingExpression(box, ToggleButton.IsCheckedProperty)?.UpdateTarget();
+        }
+    }
+
+    /// <summary>Says the program is missing, and lets the user point at its exe.</summary>
+    private bool LocateByHand(ExternalTool tool)
+    {
+        if (new ProgramNotFoundWindow(this, tool).ShowDialog() != true) return false;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = $"Locate {tool.ExeName}",
+            Filter = $"{tool.ExeName}|{tool.ExeName}|Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(this) != true) return false;
+
+        tool.Choose(dialog.FileName);
+        return true;
+    }
 
     /// <summary>
     /// Opens the repository at the typed path. A path that fails leaves the message under the

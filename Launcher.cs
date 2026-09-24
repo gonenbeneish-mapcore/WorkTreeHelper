@@ -1,14 +1,16 @@
 using System.Diagnostics;
 using System.IO;
+using Microsoft.Win32;
 
 namespace WorktreeHelper;
 
 /// <summary>Opens a folder in external tools.</summary>
 public static class Launcher
 {
-    public static void OpenInVsCode(string folder)
+    /// <summary>Opens the folder in VS Code, with <paramref name="exe"/> where one was located.</summary>
+    public static void OpenInVsCode(string folder, string? exe = null)
     {
-        var exe = FindVsCode();
+        exe ??= FindVsCode();
         if (exe is not null)
         {
             Start(exe, Quote(folder), folder);
@@ -64,10 +66,10 @@ public static class Launcher
     /// Opens the worktree folder itself in Visual Studio, which is how the builds driven from
     /// CMake rather than from a generated solution are worked on.
     /// </summary>
-    public static void OpenFolderInVisualStudio(string folder)
+    public static void OpenFolderInVisualStudio(string folder, string? devenv = null)
     {
-        var devenv = FindVisualStudio()
-                     ?? throw new FileNotFoundException("Could not find Visual Studio on this machine.");
+        devenv ??= FindVisualStudio()
+                   ?? throw new FileNotFoundException("Could not find Visual Studio on this machine.");
         Start(devenv, Quote(folder), folder);
     }
 
@@ -76,7 +78,7 @@ public static class Launcher
     /// Through vswhere, which ships with the installer and is the supported way to find one.
     /// Guessing at a path under Program Files finds only the edition guessed at.
     /// </remarks>
-    private static string? FindVisualStudio()
+    public static string? FindVisualStudio()
     {
         var vswhere = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
@@ -106,6 +108,57 @@ public static class Launcher
         }
     }
 
+    /// <summary>Opens the worktree in Git Extensions' browse window, the one with the history.</summary>
+    public static void OpenInGitExtensions(string exe, string folder)
+        => Start(exe, $"browse {Quote(folder)}", folder);
+
+    /// <summary>Where Git Extensions is installed, or null where it is not.</summary>
+    /// <remarks>
+    /// The installer records its folder in the registry, per user or per machine, and that is
+    /// asked first. The usual install folders and PATH, where its gitex.cmd sits beside the
+    /// exe, catch a copy that was unzipped rather than installed.
+    /// </remarks>
+    public static string? FindGitExtensions()
+    {
+        const string exeName = "GitExtensions.exe";
+        var candidates = new List<string>();
+
+        foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
+        {
+            try
+            {
+                using var key = hive.OpenSubKey(@"Software\GitExtensions");
+                if (key?.GetValue("InstallDir") is string dir && dir.Length > 0)
+                    candidates.Add(Path.Combine(dir, exeName));
+            }
+            catch { /* unreadable key: look elsewhere */ }
+        }
+
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GitExtensions", exeName));
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "GitExtensions", exeName));
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "GitExtensions", exeName));
+
+        foreach (var c in candidates)
+        {
+            try
+            {
+                if (File.Exists(c)) return c;
+            }
+            catch { /* malformed InstallDir */ }
+        }
+
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                var exe = Path.Combine(dir, exeName);
+                if (File.Exists(exe)) return exe;
+            }
+            catch { /* malformed PATH entry */ }
+        }
+        return null;
+    }
+
     /// <summary>Hands a URL to whatever the user browses with.</summary>
     public static void OpenInBrowser(string url)
         => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -113,7 +166,7 @@ public static class Launcher
     public static void OpenInExplorer(string folder)
         => Start("explorer.exe", Quote(folder), folder);
 
-    private static string? FindVsCode()
+    public static string? FindVsCode()
     {
         var candidates = new[]
         {

@@ -3,9 +3,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -45,7 +47,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _hasWorktrees;
         private set { if (Set(ref _hasWorktrees, value)) OnPropertyChanged(nameof(ShowEmptyHint)); }
     }
-    public bool ShowEmptyHint => !HasWorktrees;
+    /// <summary>Not while the first refresh is still out: that would be the wrong hint.</summary>
+    public bool ShowEmptyHint => IsListReady && !HasWorktrees;
 
     private bool _isPinned;
     /// <summary>
@@ -197,7 +200,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string Error
     {
         get => _error;
-        private set { if (Set(ref _error, value)) OnPropertyChanged(nameof(HasError)); }
+        private set
+        {
+            if (!Set(ref _error, value)) return;
+            OnPropertyChanged(nameof(HasError));
+            // The bar under the list comes and goes with it, and its text wraps to more or
+            // fewer lines; the window grows to fit rather than squeezing the list.
+            if (IsLoaded) AutoSize();
+        }
     }
     public bool HasError => Error.Length > 0;
 
@@ -315,10 +325,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void DismissWhatsNew_Click(object sender, RoutedEventArgs e)
     {
-        ShowWhatsNew = false;
         MarkWhatsNewSeen();
-        // The fold is gone, so the window is taller than what is left in it.
-        AutoSize();
+        // Folded shut, with the window shrinking to what is left in it.
+        FoldAway(WhatsNewFold, () => ShowWhatsNew = false);
         // An update found while the fold was up was held back so as not to cover it.
         AnnounceUpdate();
     }
@@ -372,6 +381,83 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    // Which buttons the rows carry. Each is a switch on a whole column: a button turned off
+    // is collapsed in every row, whatever the row would otherwise show.
+    //
+    // The three that hand the worktree to a program are also off wherever that program is
+    // not installed, which is what ExternalTool keeps track of.
+
+    public ExternalTool VsCodeTool { get; } = new("VS Code", "Code.exe", Launcher.FindVsCode);
+    public ExternalTool GitExtensionsTool { get; } = new("Git Extensions", "GitExtensions.exe", Launcher.FindGitExtensions);
+    public ExternalTool VisualStudioTool { get; } = new("Visual Studio", "devenv.exe", Launcher.FindVisualStudio);
+
+    private ExternalTool[] Tools => [VsCodeTool, GitExtensionsTool, VisualStudioTool];
+
+    /// <summary>
+    /// Fills a tool in from the settings, and writes it back to them whenever it changes.
+    /// </summary>
+    private void TrackTool(ExternalTool tool, bool wanted, string? chosen, Action<ExternalTool> save)
+    {
+        tool.Wanted = wanted;
+        tool.Chosen = chosen;
+        tool.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ExternalTool.Wanted) or nameof(ExternalTool.Chosen))
+            {
+                save(tool);
+                _settings.Save();
+            }
+            // A column more or fewer changes how wide the window wants to be. Not before the
+            // window is up: the first look for the programs can finish before that.
+            else if (e.PropertyName == nameof(ExternalTool.Shown) && IsLoaded)
+                AutoSize();
+            // Found, lost, or pointed at by hand: the button shows that program's icon.
+            else if (e.PropertyName == nameof(ExternalTool.Path))
+                tool.Icon = AppIcons.OfFile(tool.Path);
+        };
+    }
+
+    /// <summary>The terminal button's icon; null keeps its prompt.</summary>
+    public ImageSource? TerminalIcon { get; } = AppIcons.OfTerminal();
+
+    /// <summary>The Explorer button's icon; null keeps its folder.</summary>
+    public ImageSource? ExplorerIcon { get; } = AppIcons.OfExplorer();
+
+    /// <summary>
+    /// Looks for the programs again, each on its own so a slow one holds up only its own
+    /// button: Visual Studio is found by starting a process, the others by checking a file.
+    /// </summary>
+    public Task LocateToolsAsync()
+        => Task.WhenAll(Tools.Select(async tool => tool.Path = await Task.Run(tool.Look)));
+
+    public bool ShowTerminalButton
+    {
+        get => _settings.ShowTerminalButton;
+        set => SetButtonShown(_settings.ShowTerminalButton, value, v => _settings.ShowTerminalButton = v);
+    }
+
+    public bool ShowExplorerButton
+    {
+        get => _settings.ShowExplorerButton;
+        set => SetButtonShown(_settings.ShowExplorerButton, value, v => _settings.ShowExplorerButton = v);
+    }
+
+    public bool ShowPullRequestButton
+    {
+        get => _settings.ShowPullRequestButton;
+        set => SetButtonShown(_settings.ShowPullRequestButton, value, v => _settings.ShowPullRequestButton = v);
+    }
+
+    private void SetButtonShown(bool current, bool value, Action<bool> store, [CallerMemberName] string? name = null)
+    {
+        if (current == value) return;
+        store(value);
+        _settings.Save();
+        OnPropertyChanged(name);
+        // A column more or fewer changes how wide the window wants to be.
+        AutoSize();
+    }
+
     // In columns, a button a row lacks keeps its place when some other row has one. These say
     // which places are kept; the row template reads them through SlotVisibility.
 
@@ -399,17 +485,38 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void UpdateHeldColumns()
     {
         var align = AlignColumns;
+        var was = (HoldVsColumn, HoldVsFolderColumn, HoldPrColumn);
         HoldVsColumn = align && Worktrees.Any(w => w.ShowVisualStudioChooser || w.ShowSolutionButton);
         HoldVsFolderColumn = align && Worktrees.Any(w => w.ShowFolderButton);
         HoldPrColumn = align && Worktrees.Any(w => w.HasPullRequest);
+
+        // A column opening or closing makes every row a button wider or narrower. Left to the
+        // next refresh, a column that opened after the window was sized - the PR one, on the
+        // first refresh after startup - pushed each row's last button past the window's edge.
+        if (IsLoaded && was != (HoldVsColumn, HoldVsFolderColumn, HoldPrColumn)) AutoSize();
     }
 
-    /// <summary>A row's buttons changed, which may open or close a column for every row.</summary>
+    /// <summary>
+    /// A row's buttons or counts changed: that may open or close a column for every row, and
+    /// it changes how wide the row wants to be.
+    /// </summary>
+    /// <remarks>
+    /// Resized from here, whatever changed them, rather than by each thing that can: the
+    /// Visual Studio buttons also change when the app is activated or is waiting for a launch
+    /// to open, outside any refresh, and a row whose button was cut off at the window's edge
+    /// stayed that way until the next one. A refresh changes many rows at once, which still
+    /// comes out as one resize.
+    /// </remarks>
     private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Worktree.ShowVisualStudioChooser) or nameof(Worktree.ShowSolutionButton)
             or nameof(Worktree.ShowFolderButton) or nameof(Worktree.HasPullRequest))
+        {
             UpdateHeldColumns();
+            if (IsLoaded) AutoSize();
+        }
+        else if (e.PropertyName is nameof(Worktree.StatusSummary) && IsLoaded)
+            AutoSize();
     }
 
     /// <summary>Opens a repository from a path typed in the options window.</summary>
@@ -443,8 +550,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _settings.AskedAboutTaskbar = true;
             _settings.Save();
-            ShowTaskbarQuestion = false;
-            AutoSize();
+            FoldAway(TaskbarQuestionFold, () => ShowTaskbarQuestion = false);
         }
     }
 
@@ -475,6 +581,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // simply creates the window with the taskbar style it is going to keep.
         ShowInTaskbar = _settings.ShowInTaskbar;
         ShowTaskbarQuestion = !_settings.AskedAboutTaskbar;
+        TrackTool(VsCodeTool, _settings.ShowCodeButton, _settings.VsCodePath,
+            t => (_settings.ShowCodeButton, _settings.VsCodePath) = (t.Wanted, t.Chosen));
+        TrackTool(GitExtensionsTool, _settings.ShowGitExtensionsButton, _settings.GitExtensionsPath,
+            t => (_settings.ShowGitExtensionsButton, _settings.GitExtensionsPath) = (t.Wanted, t.Chosen));
+        TrackTool(VisualStudioTool, _settings.ShowVisualStudioButtons, _settings.VisualStudioPath,
+            t => (_settings.ShowVisualStudioButtons, _settings.VisualStudioPath) = (t.Wanted, t.Chosen));
+        // Started now rather than left to the first refresh, which there is none of without a
+        // repository, and Options opens first then. It is awaited again by each refresh.
+        _ = LocateToolsAsync();
         PrepareWhatsNew();
 
         // Whatever an earlier update renamed aside is of no further use.
@@ -501,7 +616,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // With no repository to show - a first run, or one whose folder has gone - the
             // window starts with Options open, which is where one is chosen. Queued, so the
             // window is on screen behind it first and the update check is not held up by it.
-            if (!HasRepo) _ = Dispatcher.BeginInvoke(ShowOptions, DispatcherPriority.ApplicationIdle);
+            if (!HasRepo)
+            {
+                // Nothing to wait for: the list is the hint that says to choose one.
+                ShowList();
+                _ = Dispatcher.BeginInvoke(ShowOptions, DispatcherPriority.ApplicationIdle);
+            }
 
             // After the list, so a slow or unreachable GitHub delays nothing the user came for.
             _ = CheckForUpdateAsync();
@@ -584,6 +704,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         base.OnSourceInitialized(e);
         RestorePlacement();
+        // To the caption alone, and whatever the folds under it are asking: the list is not
+        // in yet. Now, before the window is first drawn, so no frame is at a guessed size.
+        ResizeToContent(animate: false);
         TitleBar.Match(this);
 
         ApplyIcon();
@@ -638,12 +761,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void AnswerTaskbarQuestion(bool taskbar)
     {
         _settings.AskedAboutTaskbar = true;
-        ShowTaskbarQuestion = false;
         ApplyShowInTaskbar(taskbar);
 
-        // The bar is gone, so the window is taller than its contents; nothing else would
-        // notice until the next refresh.
-        AutoSize();
+        // Folded shut, with the window shrinking to what is left in it. After the switch,
+        // which can take the window away from the taskbar and give it back.
+        FoldAway(TaskbarQuestionFold, () => ShowTaskbarQuestion = false);
 
         // Anything the question was standing in the way of can be said now.
         AnnounceUpdate();
@@ -788,6 +910,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             MergeWorktrees(list);
             HasWorktrees = Worktrees.Count > 0;
+            if (!IsListReady) _ = ShowListAnywayAsync();
             // Settles on the app's own name and version, which is what the caption rests on.
             Rest("");
             var count = $"{Worktrees.Count} worktree{(Worktrees.Count == 1 ? "" : "s")}";
@@ -799,7 +922,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             await UpdateStatusesAsync(cts.Token);
             // The drift counts arrive after that first sizing and take width of their own,
             // which the branch column would otherwise give up by trimming its text.
-            if (!cts.IsCancellationRequested) AutoSize();
+            if (!cts.IsCancellationRequested)
+            {
+                // The first time, this is what the list has been waiting for: every button
+                // and count is in, so it comes in at its size in one go.
+                if (IsListReady) AutoSize();
+                else ShowList();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -807,6 +936,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Worktrees.Clear();
             HasWorktrees = false;
             Fail(ex is GitNotFoundException or DirectoryNotFoundException ? ex.Message : $"git error: {ex.Message}");
+            // The error is what there is to show.
+            if (IsListReady) AutoSize();
+            else ShowList();
         }
         finally
         {
@@ -1299,17 +1431,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Flags the worktrees that carry the Visual Studio script. Runs before the window is
-    /// sized, since the button it governs takes width of its own.
+    /// Flags the worktrees that carry the Visual Studio script, and looks again for the
+    /// programs the buttons open, which may have been installed or removed while the app sat
+    /// in the tray. Runs before the window is sized, since these buttons take width of their own.
     /// </summary>
     private async Task UpdateLaunchersAsync()
     {
+        var tools = LocateToolsAsync();
         var targets = Worktrees.ToList();
-        if (targets.Count == 0) return;
 
         var found = await Task.Run(() => targets.Select(w => Launcher.HasVisualStudioScript(w.Path)).ToArray());
         for (var i = 0; i < targets.Count; i++)
             targets[i].HasVisualStudio = found[i];
+        await tools;
     }
 
     /// <summary>
@@ -1336,29 +1470,250 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// <summary>Widest the window will grow on its own, however long the paths are.</summary>
     private const double MaxAutoWidth = 1200;
 
+    private bool _sizePending;
+
     /// <summary>
     /// Resizes the window to fit the worktree list, capped to the monitor's work area.
     /// The window is not user-resizable, so this is the only thing that sets its size.
     /// </summary>
+    /// <remarks>
+    /// Queued rather than done here: the bindings that just changed have not reached the
+    /// rows yet, and a refresh changes several things in a row, which should come out as one
+    /// resize rather than one each.
+    /// </remarks>
     private void AutoSize()
     {
-        if (WindowState != WindowState.Normal) return; // don't fight a maximized window
-
-        var work = MonitorWorkArea.For(this);
-        MaxWidth = Math.Min(work.Width, MaxAutoWidth);
-        MaxHeight = work.Height;
-        SizeToContent = SizeToContent.WidthAndHeight;
-
-        // SizeToContent takes effect on the next layout pass. Once it has, release the
-        // caps and pull the window back onto the monitor if it outgrew it.
+        if (_sizePending) return;
+        _sizePending = true;
         Dispatcher.InvokeAsync(() =>
         {
-            SizeToContent = SizeToContent.Manual;
-            MaxWidth = MaxHeight = double.PositiveInfinity;
-            // The window grew or shrank, so the corner it is parked in has moved with it.
-            if (_userPlaced) MoveIntoView(work);
-            else AnchorNearTray();
+            _sizePending = false;
+            ResizeToContent(animate: true);
         }, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// Works out the size the content wants and takes the window there, sliding when it is
+    /// on screen.
+    /// </summary>
+    /// <remarks>
+    /// Measured here rather than through SizeToContent, which resizes in one step: to slide,
+    /// the size has to be known before the window is at it. SizeToContent measures the same
+    /// way, with the work area as the limit, and a window with no frame of its own has
+    /// nothing to add to what the content asks for.
+    /// </remarks>
+    private void ResizeToContent(bool animate)
+    {
+        if (TargetBounds() is not { } to) return;
+        if (animate && IsVisible) SlideTo(to);
+        else JumpTo(to);
+    }
+
+    /// <summary>Where and how big the window should be for what it shows now, in DIPs.</summary>
+    private Rect? TargetBounds()
+    {
+        if (WindowState != WindowState.Normal) return null; // don't fight a maximized window
+        if (Content is not UIElement root) return null;
+
+        var work = MonitorWorkArea.For(this);
+        var limit = new Size(Math.Min(work.Width, MaxAutoWidth), work.Height);
+        root.Measure(limit);
+        var width = Math.Min(Math.Max(root.DesiredSize.Width, MinWidth), limit.Width);
+        var height = Math.Min(Math.Max(root.DesiredSize.Height, MinHeight), limit.Height);
+        // Measured against the limit, not the window; the window's own layout measures it
+        // again at the size it ends up.
+        root.InvalidateMeasure();
+
+        // The corner it is parked in moves with the size, or, where the user put it, it
+        // stays put unless that would push it off the monitor.
+        var from = _resizing ? _resizeTo : new Rect(Left, Top, ActualWidth, ActualHeight);
+        double left, top;
+        if (_userPlaced)
+        {
+            left = Math.Max(work.Left, Math.Min(from.Left, work.Right - width));
+            top = Math.Max(work.Top, Math.Min(from.Top, work.Bottom - height));
+        }
+        else
+        {
+            left = work.Right - width - TrayGap;
+            top = work.Bottom - height - TrayGap;
+        }
+        return new Rect(left, top, width, height);
+    }
+
+    /// <summary>
+    /// Takes a fold under the caption away by folding it shut, while the window shrinks by
+    /// the same amount in the same time, so what is below it rises with the window's edge.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="hide"/> sets what the fold's visibility is bound to. It is let go
+    /// first, so the size the window is going to can be measured without the fold; then the
+    /// fold is held on screen, closing, until the window gets there, and handed back to its
+    /// binding after that.
+    /// </remarks>
+    private void FoldAway(FrameworkElement fold, Action hide)
+    {
+        var height = fold.ActualHeight;
+        hide();
+        if (!IsVisible || height <= 0 || TargetBounds() is not { } to)
+        {
+            AutoSize();
+            return;
+        }
+
+        fold.SetCurrentValue(VisibilityProperty, Visibility.Visible);
+        fold.ClipToBounds = true;
+        // The window's own easing and time, so the two edges move together. The margin goes
+        // with it, or the gap above the fold would stay open to the end and then snap shut.
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var shut = new DoubleAnimation(height, 0, ResizeDuration) { EasingFunction = ease };
+        var gap = new ThicknessAnimation(fold.Margin, new Thickness(fold.Margin.Left, 0, fold.Margin.Right, 0), ResizeDuration)
+        {
+            EasingFunction = ease,
+        };
+        shut.Completed += (_, _) =>
+        {
+            fold.BeginAnimation(HeightProperty, null);
+            fold.BeginAnimation(MarginProperty, null);
+            fold.ClipToBounds = false;
+            BindingOperations.GetBindingExpression(fold, VisibilityProperty)?.UpdateTarget();
+        };
+        fold.BeginAnimation(MarginProperty, gap);
+        fold.BeginAnimation(HeightProperty, shut);
+        SlideTo(to);
+    }
+
+    // ---- Resize animation ---------------------------------------------------
+    //
+    // Each frame moves and sizes the window in one SetWindowPos. Setting Left, Top, Width
+    // and Height one after another is four moves a frame, and in between them the corner
+    // that should stay put jitters.
+    //
+    // Nothing forces a layout inside a frame. Laying out from within the render callback
+    // stalled the painting altogether: the edge slid across a frozen picture that then
+    // jumped to the new one. Left to itself, WPF lays out and paints each size in turn.
+
+    private static readonly TimeSpan ResizeDuration = TimeSpan.FromMilliseconds(220);
+    private readonly Stopwatch _resizeClock = new();
+    private bool _resizing;
+    private Rect _resizeFrom, _resizeTo, _resizeNow;
+
+    private void SlideTo(Rect to)
+    {
+        // From wherever it is now, which may be partway through another slide.
+        _resizeFrom = _resizing ? _resizeNow : new Rect(Left, Top, ActualWidth, ActualHeight);
+        _resizeTo = to;
+        if (_resizeFrom == to) return;
+
+        _resizeClock.Restart();
+        if (_resizing) return;
+        _resizing = true;
+        HoldScrollBar(true);
+        CompositionTarget.Rendering += ResizeFrame;
+    }
+
+    private void ResizeFrame(object? sender, EventArgs e)
+    {
+        var t = Math.Min(1, _resizeClock.Elapsed.TotalMilliseconds / ResizeDuration.TotalMilliseconds);
+        // Ease out: quick to start, settling gently into place.
+        var k = 1 - Math.Pow(1 - t, 3);
+        _resizeNow = new Rect(
+            _resizeFrom.X + (_resizeTo.X - _resizeFrom.X) * k,
+            _resizeFrom.Y + (_resizeTo.Y - _resizeFrom.Y) * k,
+            _resizeFrom.Width + (_resizeTo.Width - _resizeFrom.Width) * k,
+            _resizeFrom.Height + (_resizeTo.Height - _resizeFrom.Height) * k);
+        SetBounds(_resizeNow);
+
+        if (t >= 1) JumpTo(_resizeTo);
+    }
+
+    /// <summary>
+    /// Keeps the list's scroll bar out of the way while the window slides: for a frame here
+    /// and there the list is a pixel short of its rows, and the bar blinked in and out.
+    /// </summary>
+    private void HoldScrollBar(bool hold)
+        => ListScroller.VerticalScrollBarVisibility = hold ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Auto;
+
+    /// <summary>Moves and sizes the window at once, in DIPs.</summary>
+    private void SetBounds(Rect r)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        _placingWindow = true;
+        SetWindowPos(hwnd, IntPtr.Zero,
+            (int)Math.Round(r.X * dpi.DpiScaleX), (int)Math.Round(r.Y * dpi.DpiScaleY),
+            (int)Math.Round(r.Width * dpi.DpiScaleX), (int)Math.Round(r.Height * dpi.DpiScaleY),
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        _placingWindow = false;
+    }
+
+    /// <summary>
+    /// Straight to the size and place, ending any slide. Through WPF's own properties, so
+    /// they hold the final values: the placement code reads Width and Height.
+    /// </summary>
+    private void JumpTo(Rect r)
+    {
+        if (_resizing)
+        {
+            CompositionTarget.Rendering -= ResizeFrame;
+            _resizing = false;
+            HoldScrollBar(false);
+        }
+        _placingWindow = true;
+        Left = r.X;
+        Top = r.Y;
+        Width = r.Width;
+        Height = r.Height;
+        _placingWindow = false;
+    }
+
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    // ---- First appearance ---------------------------------------------------
+    //
+    // The window opens at once as its caption alone, so it can be moved or closed straight
+    // away, and the list comes in with one resize once the first refresh has everything:
+    // the rows, their buttons, the pull requests and the counts. Showing the rows as each of
+    // those arrived meant a window that grew three times in front of the user, and a first
+    // size guessed before any of it was a big empty window that then shrank.
+
+    private bool _isListReady;
+
+    /// <summary>The first refresh is in, so the list is shown. Stays true from then on.</summary>
+    public bool IsListReady
+    {
+        get => _isListReady;
+        private set
+        {
+            if (Set(ref _isListReady, value)) OnPropertyChanged(nameof(ShowEmptyHint));
+        }
+    }
+
+    /// <summary>
+    /// Longest the list waits for the rest once git has listed the worktrees. GitHub can take
+    /// fifteen seconds to give up, and the list should not wait on it that long.
+    /// </summary>
+    private static readonly TimeSpan ListWaitsAtMost = TimeSpan.FromSeconds(3);
+
+    /// <summary>Shows the list, at the size it wants, if it is not showing yet.</summary>
+    private void ShowList()
+    {
+        if (IsListReady) return;
+        IsListReady = true;
+        AutoSize();
+    }
+
+    /// <summary>Shows the list after <see cref="ListWaitsAtMost"/> if the refresh is still going.</summary>
+    private async Task ShowListAnywayAsync()
+    {
+        await Task.Delay(ListWaitsAtMost);
+        ShowList();
     }
 
     /// <summary>Gap left between the window and the corner it is parked in.</summary>
@@ -1467,7 +1822,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 Report($"Focused VS Code: {folder}");
                 return;
             }
-            Launcher.OpenInVsCode(folder);
+            Launcher.OpenInVsCode(folder, VsCodeTool.Path);
             Report($"Opened VS Code: {folder}");
             _ = WatchForVsCodeWindowAsync(folder);
         }
@@ -1504,6 +1859,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         });
     private void MenuOpenTerminal_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenTerminal, wt.Path, "terminal"));
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
+    private void MenuOpenGitExtensions_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(OpenInGitExtensions, wt.Path, "Git Extensions"));
+
+    private const string RowGitExtensionsTag = "row.gitextensions";
+
+    /// <summary>
+    /// Offers Git Extensions only where it is installed. Done here because the menu is a
+    /// popup of its own and cannot bind to the window, and it is one menu for every row.
+    /// </summary>
+    private void RowMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            if (Equals(item.Tag, RowGitExtensionsTag))
+                item.Visibility = GitExtensionsTool.Found ? Visibility.Visible : Visibility.Collapsed;
+    }
     private void MenuCopyPath_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Path, "path"));
     private void MenuCopyBranch_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Branch.Length > 0 ? wt.Branch : wt.ShortHead, "branch"));
 
@@ -1659,7 +2029,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         menu.Items.Add(Choice(
             $"Generate the solution and open it  ({Launcher.VisualStudioScript})",
             "Runs the script, which generates the solution and opens it. This is the Windows build.",
-            FindResource("VsSolutionIcon"),
+            VisualStudioMark(folder: false),
             // Focused if it turns out to be open already, rather than generated over it.
             () => _ = ReachVisualStudioAsync(folder, VisualStudioMode.Solution),
             preferred: true));
@@ -1667,7 +2037,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         menu.Items.Add(Choice(
             "Open this folder in Visual Studio",
             "Opens the worktree as a folder, for the builds configured through CMake.",
-            FindResource("VsFolderIcon"),
+            VisualStudioMark(folder: true),
             () => _ = ReachVisualStudioAsync(folder, VisualStudioMode.Folder)));
 
         menu.IsOpen = true;
@@ -1679,6 +2049,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             item.Click += (_, _) => run();
             return item;
         }
+    }
+
+    /// <summary>
+    /// What the row's Visual Studio buttons show, for the menu beside its two choices:
+    /// Visual Studio's icon, with a folder on it for the folder mode, or the lettering where
+    /// there is no icon to be had.
+    /// </summary>
+    private object VisualStudioMark(bool folder)
+    {
+        if (VisualStudioTool.Icon is not { } icon)
+            return FindResource(folder ? "VsFolderIcon" : "VsSolutionIcon");
+
+        var mark = new Grid();
+        mark.Children.Add(new Image { Source = icon, Style = (Style)FindResource("AppIcon") });
+        if (folder) mark.Children.Add((UIElement)FindResource("FolderBadge"));
+        return mark;
     }
 
     private void RunVisualStudioScript(string folder)
@@ -1700,7 +2086,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            Launcher.OpenFolderInVisualStudio(folder);
+            Launcher.OpenFolderInVisualStudio(folder, VisualStudioTool.Path);
             Report($"Opening in Visual Studio: {folder}");
             _ = WatchForFolderAsync(folder);
         }
@@ -1712,6 +2098,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void OpenTerminal_Click(object sender, RoutedEventArgs e) => RunAction(sender, Launcher.OpenTerminal, "terminal");
     private void OpenExplorer_Click(object sender, RoutedEventArgs e) => RunAction(sender, Launcher.OpenInExplorer, "Explorer");
+    private void OpenGitExtensions_Click(object sender, RoutedEventArgs e) => RunAction(sender, OpenInGitExtensions, "Git Extensions");
+
+    private void OpenInGitExtensions(string folder)
+    {
+        // Removed since the last look, which is only found out by trying.
+        var exe = GitExtensionsTool.Path ?? throw new FileNotFoundException("Git Extensions is not installed.");
+        Launcher.OpenInGitExtensions(exe, folder);
+    }
 
     private void RunAction(object sender, Action<string> action, string what)
     {

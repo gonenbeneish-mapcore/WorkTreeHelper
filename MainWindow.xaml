@@ -5,7 +5,7 @@
         xmlns:local="clr-namespace:WorktreeHelper"
         Title="{Binding WindowTitle}"
         Icon="app.ico"
-        Width="700" Height="380" MinWidth="440" MinHeight="80"
+        Width="440" Height="28" MinWidth="440" MinHeight="28"
         ResizeMode="CanMinimize"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
@@ -48,10 +48,12 @@
         </ContextMenu>
         <!-- One menu for every row: a ContextMenu inherits the DataContext of the row it
              opens on, so each item acts on the worktree that was right-clicked. -->
-        <ContextMenu x:Key="RowMenu">
+        <ContextMenu x:Key="RowMenu" Opened="RowMenu_Opened">
             <MenuItem Header="Open in VS Code" Click="MenuOpenCode_Click" FontWeight="SemiBold"/>
             <MenuItem Header="Open terminal here" Click="MenuOpenTerminal_Click"/>
             <MenuItem Header="Show in File Explorer" Click="MenuOpenExplorer_Click"/>
+            <MenuItem Header="Open in Git Extensions" Click="MenuOpenGitExtensions_Click"
+                      Tag="row.gitextensions"/>
             <MenuItem Header="Open in Visual Studio" Click="MenuOpenVisualStudio_Click"
                       Visibility="{Binding HasVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
             <MenuItem Header="Open pull request" Click="MenuOpenPullRequest_Click"
@@ -282,6 +284,15 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="ToolTip" Value="Open a terminal in this worktree"/>
         </Style>
+        <!-- Git Extensions, where it is installed. Lettered like the PR and VS buttons: the
+             icon font has nothing for it, and its own icon would be the one coloured thing
+             among monochrome glyphs. -->
+        <Style x:Key="GitExtensionsButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="ToolTip" Value="Open this worktree in Git Extensions"/>
+        </Style>
         <!-- Visual Studio buttons. Lettering rather than a glyph: the icon font has nothing
              that reads as Visual Studio, and two initials are unmistakable.
 
@@ -320,6 +331,25 @@
             <TextBlock Text="VS" FontSize="6" FontWeight="SemiBold" FontFamily="Segoe UI"
                        Margin="0,2.5,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Grid>
+        <!-- Under an icon whose window is already open, the way the taskbar marks a running
+             app: the icon itself is in colour and cannot be tinted to say so. -->
+        <Style x:Key="RunningMark" TargetType="Border">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="Height" Value="2"/>
+            <Setter Property="CornerRadius" Value="1"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Margin" Value="0,0,0,-3"/>
+            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+        </Style>
+        <!-- The folder on Visual Studio's icon that makes it the folder mode, set on a patch of
+             the card's colour so it reads apart from the icon under it. -->
+        <Border x:Key="FolderBadge" x:Shared="False" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,-3,-2" Padding="1,0,1,0" CornerRadius="2"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="9"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+        </Border>
         <!-- Shown while neither mode is open, where there is still a choice to make. -->
         <Style x:Key="VsChooserButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
             <Setter Property="ToolTip" Value="Open this worktree in Visual Studio — the generated solution, or the folder"/>
@@ -448,7 +478,7 @@
         <StackPanel Grid.Row="1">
         <!-- Asked once, on the first run, and never again. The window is already on screen at
              that point, so this costs no dialog. -->
-        <Border Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
+        <Border x:Name="TaskbarQuestionFold" Margin="6,4,6,0" Padding="8,6" CornerRadius="6"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                 Visibility="{Binding ShowTaskbarQuestion, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
@@ -477,7 +507,7 @@
              text measured with room to spare would rather be one long line, which would drag
              the window as wide as the screen allows. Capped in height too, with a scroll bar
              for a long release, since a window that is all release notes has lost its point. -->
-        <Border Margin="6,4,6,0" Padding="12,9" CornerRadius="6"
+        <Border x:Name="WhatsNewFold" Margin="6,4,6,0" Padding="12,9" CornerRadius="6"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource AccentFillColorDefaultBrush}" BorderThickness="1"
                 Visibility="{Binding ShowWhatsNew, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
@@ -544,7 +574,9 @@
         </Border>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto">
+        <!-- Held back until the first refresh has all of it, so it comes in with one resize. -->
+        <ScrollViewer x:Name="ListScroller" Grid.Row="2" Margin="6,2,6,4" VerticalScrollBarVisibility="Auto"
+                      Visibility="{Binding IsListReady, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
             <ItemsControl ItemsSource="{Binding Worktrees}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:Worktree}">
@@ -615,12 +647,26 @@
                                      and the buttons are kept in columns, and because every button is
                                      the same width, the next one lands where it would in a row that
                                      has it. A column no row uses is collapsed everywhere and costs
-                                     nothing. -->
+                                     nothing.
+
+                                     Each kind can be turned off in Options, which collapses it in
+                                     every row alike, so the columns stay lined up. The buttons that
+                                     come and go by row sit in a panel that the option collapses,
+                                     because their own Visibility is already the row's to decide. -->
                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <!-- Each button shows the icon of the program it opens, as Windows
+                                         does, and keeps its own mark only where no icon could be had.
+                                         A colour icon cannot be tinted to say its window is already open,
+                                         so that is a short accent bar under it, the way the taskbar marks
+                                         a running app. -->
                                     <Button Style="{StaticResource CodeButton}" Click="OpenCode_Click" Tag="{Binding Path}"
-                                            AutomationProperties.Name="Open in VS Code">
+                                            AutomationProperties.Name="Open in VS Code"
+                                            Visibility="{Binding VsCodeTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                         <Grid>
-                                            <TextBlock Text="&#xE943;" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Image Style="{StaticResource AppIcon}"
+                                                   Source="{Binding VsCodeTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            <TextBlock Text="&#xE943;" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding VsCodeTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Style.Triggers>
@@ -631,14 +677,44 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                            <Border Style="{StaticResource RunningMark}"
+                                                    Visibility="{Binding IsOpenInVsCode, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                         </Grid>
                                     </Button>
                                     <Button Style="{StaticResource TerminalButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
-                                            Content="&gt;_"
-                                            AutomationProperties.Name="Open a terminal in this worktree"/>
+                                            AutomationProperties.Name="Open a terminal in this worktree"
+                                            Visibility="{Binding ShowTerminalButton, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Grid>
+                                            <Image Style="{StaticResource AppIcon}"
+                                                   Source="{Binding TerminalIcon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            <TextBlock Text="&gt;_" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding TerminalIcon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                        </Grid>
+                                    </Button>
                                     <Button Style="{StaticResource RowButton}" Click="OpenExplorer_Click" Tag="{Binding Path}"
-                                            Content="&#xE8B7;" ToolTip="Show this folder in File Explorer"
-                                            AutomationProperties.Name="Show this folder in File Explorer"/>
+                                            ToolTip="Show this folder in File Explorer"
+                                            AutomationProperties.Name="Show this folder in File Explorer"
+                                            Visibility="{Binding ShowExplorerButton, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Grid>
+                                            <Image Style="{StaticResource AppIcon}"
+                                                   Source="{Binding ExplorerIcon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            <TextBlock Text="&#xE8B7;" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding ExplorerIcon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                        </Grid>
+                                    </Button>
+                                    <!-- Only where Git Extensions is installed. With the buttons every
+                                         row has, rather than after the ones that come and go, so it
+                                         lines up down the list however the rows below it differ. -->
+                                    <Button Style="{StaticResource GitExtensionsButton}" Click="OpenGitExtensions_Click" Tag="{Binding Path}"
+                                            AutomationProperties.Name="Open in Git Extensions"
+                                            Visibility="{Binding GitExtensionsTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Grid>
+                                            <Image Style="{StaticResource AppIcon}"
+                                                   Source="{Binding GitExtensionsTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            <TextBlock Text="GE" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding GitExtensionsTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                        </Grid>
+                                    </Button>
                                     <!-- Only for worktrees that carry the script, so nothing shows here
                                          for a repository that does not use one.
 
@@ -647,44 +723,78 @@
                                          focuses its window, and the other - where a second instance is
                                          allowed - starts it without asking. The chooser and the solution
                                          button share one slot because they are never up together, so it is
-                                         the chooser that holds the place when neither is. -->
-                                    <Button Style="{StaticResource VsChooserButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
-                                            Content="VS" AutomationProperties.Name="Open in Visual Studio">
-                                        <Button.Visibility>
-                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
-                                                <Binding Path="ShowVisualStudioChooser"/>
-                                                <Binding Path="HoldVsColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                                <Binding Path="ShowSolutionButton"/>
-                                            </MultiBinding>
-                                        </Button.Visibility>
-                                    </Button>
-                                    <Button Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
-                                            Content="VS" AutomationProperties.Name="The Visual Studio solution"
-                                            Visibility="{Binding ShowSolutionButton, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
-                                    <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
-                                            AutomationProperties.Name="This worktree as a folder in Visual Studio"
-                                            Content="{StaticResource VsFolderIcon}">
-                                        <Button.Visibility>
-                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
-                                                <Binding Path="ShowFolderButton"/>
-                                                <Binding Path="HoldVsFolderColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                            </MultiBinding>
-                                        </Button.Visibility>
-                                    </Button>
+                                         the chooser that holds the place when neither is.
+
+                                         All three carry Visual Studio's icon; the folder one has a folder
+                                         on it, which is what tells the two modes apart. -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Visibility="{Binding VisualStudioTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Button Style="{StaticResource VsChooserButton}" Click="OpenVisualStudio_Click" Tag="{Binding Path}"
+                                                AutomationProperties.Name="Open in Visual Studio">
+                                            <Button.Visibility>
+                                                <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                    <Binding Path="ShowVisualStudioChooser"/>
+                                                    <Binding Path="HoldVsColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                    <Binding Path="ShowSolutionButton"/>
+                                                </MultiBinding>
+                                            </Button.Visibility>
+                                            <Grid>
+                                                <Image Style="{StaticResource AppIcon}"
+                                                       Source="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                <TextBlock Text="VS" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
+                                                AutomationProperties.Name="The Visual Studio solution"
+                                                Visibility="{Binding ShowSolutionButton, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                            <Grid>
+                                                <Image Style="{StaticResource AppIcon}"
+                                                       Source="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                <TextBlock Text="VS" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                                <Border Style="{StaticResource RunningMark}"
+                                                        Visibility="{Binding IsSolutionOpen, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                            </Grid>
+                                        </Button>
+                                        <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
+                                                AutomationProperties.Name="This worktree as a folder in Visual Studio">
+                                            <Button.Visibility>
+                                                <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                    <Binding Path="ShowFolderButton"/>
+                                                    <Binding Path="HoldVsFolderColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                </MultiBinding>
+                                            </Button.Visibility>
+                                            <Grid>
+                                                <Grid Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenSet}}">
+                                                    <Image Style="{StaticResource AppIcon}"
+                                                           Source="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                    <ContentControl Content="{StaticResource FolderBadge}"/>
+                                                </Grid>
+                                                <ContentControl Content="{StaticResource VsFolderIcon}"
+                                                                Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                                <Border Style="{StaticResource RunningMark}"
+                                                        Visibility="{Binding IsFolderOpen, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
                                     <!-- Only where the branch has an open pull request. -->
-                                    <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
-                                            Tag="{Binding PullRequest}" Content="PR"
-                                            AutomationProperties.Name="Open the pull request">
-                                        <Button.Visibility>
-                                            <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
-                                                <Binding Path="HasPullRequest"/>
-                                                <Binding Path="HoldPrColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                            </MultiBinding>
-                                        </Button.Visibility>
-                                        <Button.ToolTip>
-                                            <TextBlock Text="{Binding PullRequestTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
-                                        </Button.ToolTip>
-                                    </Button>
+                                    <StackPanel Orientation="Horizontal"
+                                                Visibility="{Binding ShowPullRequestButton, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
+                                                Tag="{Binding PullRequest}" Content="{StaticResource GitHubMark}"
+                                                AutomationProperties.Name="Open the pull request">
+                                            <Button.Visibility>
+                                                <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                    <Binding Path="HasPullRequest"/>
+                                                    <Binding Path="HoldPrColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                </MultiBinding>
+                                            </Button.Visibility>
+                                            <Button.ToolTip>
+                                                <TextBlock Text="{Binding PullRequestTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
+                                            </Button.ToolTip>
+                                        </Button>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
                         </Border>

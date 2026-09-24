@@ -41,6 +41,28 @@ public sealed class Settings
     public bool AlignColumns { get; set; }
 
     /// <summary>
+    /// Which of the row's buttons are shown. All of them by default, and in an older settings
+    /// file, which has none of these keys. A hidden button's action stays on the row's menu.
+    /// </summary>
+    public bool ShowCodeButton { get; set; } = true;
+    public bool ShowTerminalButton { get; set; } = true;
+    public bool ShowExplorerButton { get; set; } = true;
+    /// <summary>Only where Git Extensions is installed, whatever this says.</summary>
+    public bool ShowGitExtensionsButton { get; set; } = true;
+    /// <summary>Only where Visual Studio is installed and the worktree carries the script.</summary>
+    public bool ShowVisualStudioButtons { get; set; } = true;
+    /// <summary>Only on branches with a pull request open, whatever this says.</summary>
+    public bool ShowPullRequestButton { get; set; } = true;
+
+    /// <summary>
+    /// Programs the user pointed at themselves, from Options, because they were not found
+    /// where they are normally installed. Null for one that was found on its own.
+    /// </summary>
+    public string? VsCodePath { get; set; }
+    public string? GitExtensionsPath { get; set; }
+    public string? VisualStudioPath { get; set; }
+
+    /// <summary>
     /// The version whose what's-new was last closed, so the next version knows what to tell.
     /// Null in a file from before this existed, which is taken as "not told about this one".
     /// </summary>

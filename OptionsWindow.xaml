@@ -6,7 +6,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WorktreeHelper"
         Title="Options"
-        Width="440" SizeToContent="Height"
+        Width="620" SizeToContent="Height"
         ResizeMode="NoResize" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -64,16 +64,30 @@
              Each button only shows the setting, and says what it wants through Checked. Bound
              both ways, a pair on one setting writes back to it while the group is unchecking
              the other button, which then writes the opposite: once an earlier Options window
-             was still listening as well, that went round until the stack ran out. -->
+             was still listening as well, that went round until the stack ran out.
+
+             The two choices of a pair sit side by side, which keeps the window from being taller
+             than a small screen now that there are buttons to choose as well. -->
         <TextBlock Style="{StaticResource Heading}" Text="Where it lives" Margin="0,10,0,6"/>
-        <RadioButton GroupName="Home" Content="System tray" Checked="Tray_Checked"
-                     IsChecked="{Binding LivesInTaskbar, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
-        <TextBlock Style="{StaticResource Explains}"
-                   Text="An icon in the notification area. Closing the window puts it away; Exit on the icon's menu quits."/>
-        <RadioButton GroupName="Home" Content="Taskbar" Checked="Taskbar_Checked"
-                     IsChecked="{Binding LivesInTaskbar, Mode=OneWay}"/>
-        <TextBlock Style="{StaticResource Explains}"
-                   Text="A taskbar button and an Alt+Tab entry, and no tray icon. Closing the window exits the app."/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <RadioButton GroupName="Home" Content="System tray" Checked="Tray_Checked"
+                             IsChecked="{Binding LivesInTaskbar, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+                <TextBlock Style="{StaticResource Explains}"
+                           Text="An icon in the notification area. Closing the window puts it away; Exit on the icon's menu quits."/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <RadioButton GroupName="Home" Content="Taskbar" Checked="Taskbar_Checked"
+                             IsChecked="{Binding LivesInTaskbar, Mode=OneWay}"/>
+                <TextBlock Style="{StaticResource Explains}"
+                           Text="A taskbar button and an Alt+Tab entry, and no tray icon. Closing the window exits the app."/>
+            </StackPanel>
+        </Grid>
 
         <TextBlock Style="{StaticResource Heading}" Text="Visual Studio" Margin="0,10,0,6"/>
         <CheckBox Content="Allow a second Visual Studio on the same worktree"
@@ -81,15 +95,83 @@
         <TextBlock Style="{StaticResource Explains}"
                    Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
 
+        <!-- Which buttons a row carries. The ones that come and go by row still only appear
+             where they have something to open; this can only take them away.
+
+             The three that open a program show whether the button is up, not merely wanted,
+             so one whose program is missing is unticked. Ticking it then asks for the program
+             rather than ticking a box that would change nothing, which is why those three
+             only show the value and act through Click, like the radio buttons below.
+
+             In the order the row has them, read across. -->
         <TextBlock Style="{StaticResource Heading}" Text="Buttons" Margin="0,10,0,6"/>
-        <RadioButton GroupName="Layout" Content="Packed" Checked="Packed_Checked"
-                     IsChecked="{Binding AlignColumns, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
-        <TextBlock Style="{StaticResource Explains}"
-                   Text="Each row's buttons sit together, which keeps the window as small as it can be."/>
-        <RadioButton GroupName="Layout" Content="In columns" Checked="Columns_Checked"
-                     IsChecked="{Binding AlignColumns, Mode=OneWay}"/>
-        <TextBlock Style="{StaticResource Explains}"
-                   Text="Each kind of button keeps its own column down the list, with a gap in a row that has none."/>
+        <!-- Each with the icon its button carries, so the box and the button are plainly the
+             same thing. A program that was not found has no icon to show, and leaves the space,
+             so the names still line up. -->
+        <UniformGrid Columns="3">
+            <CheckBox Margin="0,0,0,4" Tag="{Binding VsCodeTool}" AutomationProperties.Name="VS Code"
+                      IsChecked="{Binding VsCodeTool.Shown, Mode=OneWay}" Click="Tool_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding VsCodeTool.Icon}"/>
+                    <TextBlock Text="VS Code" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+            <CheckBox Margin="0,0,0,4" IsChecked="{Binding ShowTerminalButton}" AutomationProperties.Name="Terminal">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding TerminalIcon}"/>
+                    <TextBlock Text="Terminal" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+            <CheckBox Margin="0,0,0,4" IsChecked="{Binding ShowExplorerButton}" AutomationProperties.Name="File Explorer">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding ExplorerIcon}"/>
+                    <TextBlock Text="File Explorer" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+            <CheckBox Margin="0,0,0,4" Tag="{Binding GitExtensionsTool}" AutomationProperties.Name="Git Extensions"
+                      IsChecked="{Binding GitExtensionsTool.Shown, Mode=OneWay}" Click="Tool_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding GitExtensionsTool.Icon}"/>
+                    <TextBlock Text="Git Extensions" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+            <CheckBox Margin="0,0,0,4" Tag="{Binding VisualStudioTool}" AutomationProperties.Name="Visual Studio"
+                      IsChecked="{Binding VisualStudioTool.Shown, Mode=OneWay}" Click="Tool_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding VisualStudioTool.Icon}"/>
+                    <TextBlock Text="Visual Studio" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+            <CheckBox Margin="0,0,0,4" IsChecked="{Binding ShowPullRequestButton}" AutomationProperties.Name="Pull request">
+                <StackPanel Orientation="Horizontal">
+                    <ContentControl Content="{StaticResource GitHubMark}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Pull request" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+        </UniformGrid>
+        <TextBlock Style="{StaticResource Explains}" Margin="0,2,0,8"
+                   Text="Visual Studio and the pull request appear only on a row that has one to open. A program that is not installed leaves its box unticked; tick it to find the program yourself. A button turned off is still on the row's right-click menu."/>
+
+        <TextBlock Style="{StaticResource Heading}" Text="Layout" Margin="0,6,0,6"/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <RadioButton GroupName="Layout" Content="Packed" Checked="Packed_Checked"
+                             IsChecked="{Binding AlignColumns, Mode=OneWay, Converter={x:Static local:BoolToVisibilityConverter.Not}}"/>
+                <TextBlock Style="{StaticResource Explains}"
+                           Text="Each row's buttons sit together, which keeps the window as small as it can be."/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <RadioButton GroupName="Layout" Content="In columns" Checked="Columns_Checked"
+                             IsChecked="{Binding AlignColumns, Mode=OneWay}"/>
+                <TextBlock Style="{StaticResource Explains}"
+                           Text="Each kind of button keeps its own column down the list, with a gap in a row that has none."/>
+            </StackPanel>
+        </Grid>
 
         <Button Content="Close" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="18,4"
                 IsCancel="True" Click="Close_Click"/>
