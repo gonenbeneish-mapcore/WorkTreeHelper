@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.1
+
+- Bug fixes and stability improvements.
+
 ## v1.6.0
 
 - A **Git Extensions** button, where Git Extensions is installed.
