@@ -34,14 +34,14 @@
     <Window.Resources>
         <!-- Shown from the tray icon. A WPF menu rather than a Win32 one so it
              follows the Fluent light/dark theme like the rest of the app. The worktrees
-             themselves are inserted below the first item on each open, by PopulateTrayMenu. -->
+             themselves are inserted below the first item on each open, by PopulateTrayMenu.
+
+             No taskbar switch of its own: where the app lives is in Options, one item down,
+             and the same choice in two places was one more thing on a short menu. -->
         <ContextMenu x:Key="TrayMenu">
             <MenuItem Header="Show Worktree Helper" Click="TrayShow_Click" FontWeight="SemiBold"
                       Tag="tray.show"/>
             <MenuItem Header="Refresh" Click="Refresh_Click"/>
-            <MenuItem Header="Show in taskbar" IsCheckable="True" Click="TrayShowInTaskbar_Click"
-                      Tag="tray.taskbar"
-                      ToolTip="Live in the taskbar rather than the notification area: a taskbar button and an Alt+Tab entry, no tray icon, and closing the window exits"/>
             <MenuItem Header="Options…" Click="Options_Click"/>
             <Separator/>
             <MenuItem Header="Exit" Click="TrayExit_Click"/>
@@ -102,11 +102,21 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="4"
-                                SnapsToDevicePixels="True">
+                        <Grid>
+                            <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="4"
+                                    SnapsToDevicePixels="True"/>
+                            <!-- The program already has this worktree open: an accent ring round
+                                 the button, which a click brings back rather than opening again.
+                                 A ring rather than a tint of the icon, which is in colour, or a
+                                 mark under it, which at this size went unnoticed. -->
+                            <Border x:Name="OpenRing" Visibility="Collapsed" CornerRadius="4" BorderThickness="1.5"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="local:OpenMark.IsOpen" Value="True">
+                                <Setter TargetName="OpenRing" Property="Visibility" Value="Visible"/>
+                            </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Fill" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                             </Trigger>
@@ -331,17 +341,6 @@
             <TextBlock Text="VS" FontSize="6" FontWeight="SemiBold" FontFamily="Segoe UI"
                        Margin="0,2.5,0,0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Grid>
-        <!-- Under an icon whose window is already open, the way the taskbar marks a running
-             app: the icon itself is in colour and cannot be tinted to say so. -->
-        <Style x:Key="RunningMark" TargetType="Border">
-            <Setter Property="Width" Value="8"/>
-            <Setter Property="Height" Value="2"/>
-            <Setter Property="CornerRadius" Value="1"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Bottom"/>
-            <Setter Property="Margin" Value="0,0,0,-3"/>
-            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
-        </Style>
         <!-- The folder on Visual Studio's icon that makes it the folder mode, set on a patch of
              the card's colour so it reads apart from the icon under it. -->
         <Border x:Key="FolderBadge" x:Shared="False" HorizontalAlignment="Right" VerticalAlignment="Bottom"
@@ -657,9 +656,9 @@
                                     <!-- Each button shows the icon of the program it opens, as Windows
                                          does, and keeps its own mark only where no icon could be had.
                                          A colour icon cannot be tinted to say its window is already open,
-                                         so that is a short accent bar under it, the way the taskbar marks
-                                         a running app. -->
+                                         so the button's own template marks it, from OpenMark. -->
                                     <Button Style="{StaticResource CodeButton}" Click="OpenCode_Click" Tag="{Binding Path}"
+                                            local:OpenMark.IsOpen="{Binding IsOpenInVsCode}"
                                             AutomationProperties.Name="Open in VS Code"
                                             Visibility="{Binding VsCodeTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                         <Grid>
@@ -677,8 +676,6 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <Border Style="{StaticResource RunningMark}"
-                                                    Visibility="{Binding IsOpenInVsCode, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                         </Grid>
                                     </Button>
                                     <Button Style="{StaticResource TerminalButton}" Click="OpenTerminal_Click" Tag="{Binding Path}"
@@ -706,6 +703,7 @@
                                          row has, rather than after the ones that come and go, so it
                                          lines up down the list however the rows below it differ. -->
                                     <Button Style="{StaticResource GitExtensionsButton}" Click="OpenGitExtensions_Click" Tag="{Binding Path}"
+                                            local:OpenMark.IsOpen="{Binding IsOpenInGitExtensions}"
                                             AutomationProperties.Name="Open in Git Extensions"
                                             Visibility="{Binding GitExtensionsTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                         <Grid>
@@ -746,6 +744,7 @@
                                             </Grid>
                                         </Button>
                                         <Button Style="{StaticResource VsSolutionButton}" Click="SolutionVisualStudio_Click" Tag="{Binding Path}"
+                                                local:OpenMark.IsOpen="{Binding IsSolutionOpen}"
                                                 AutomationProperties.Name="The Visual Studio solution"
                                                 Visibility="{Binding ShowSolutionButton, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                             <Grid>
@@ -753,11 +752,10 @@
                                                        Source="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                                 <TextBlock Text="VS" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
-                                                <Border Style="{StaticResource RunningMark}"
-                                                        Visibility="{Binding IsSolutionOpen, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                             </Grid>
                                         </Button>
                                         <Button Style="{StaticResource VsFolderButton}" Click="FolderVisualStudio_Click" Tag="{Binding Path}"
+                                                local:OpenMark.IsOpen="{Binding IsFolderOpen}"
                                                 AutomationProperties.Name="This worktree as a folder in Visual Studio">
                                             <Button.Visibility>
                                                 <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
@@ -773,8 +771,6 @@
                                                 </Grid>
                                                 <ContentControl Content="{StaticResource VsFolderIcon}"
                                                                 Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
-                                                <Border Style="{StaticResource RunningMark}"
-                                                        Visibility="{Binding IsFolderOpen, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
                                             </Grid>
                                         </Button>
                                     </StackPanel>

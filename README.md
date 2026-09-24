@@ -23,11 +23,12 @@ pick the folder, or drag it onto the window. Any folder inside the project will 
 the rest by itself. It remembers, so this is a first-run thing.
 
 **Open one.** The buttons at the right of each row, in order, each showing the icon of what it
-opens. A short accent bar under VS Code or Visual Studio means that window is already open.
+opens. An accent ring round VS Code, Git Extensions or Visual Studio means that one already has
+the worktree open, and clicking it brings that window forward rather than opening another.
 
 | Button | Opens |
 |---|---|
-| VS Code | **VS Code.** Double-clicking the row does the same. Marked when that folder is already open — then it brings that window forward rather than opening a second one. |
+| VS Code | **VS Code.** Double-clicking the row does the same. |
 | Terminal | A **terminal** in that folder: Windows Terminal, or PowerShell without it. |
 | Explorer | That folder in **File Explorer**. |
 | Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
@@ -160,6 +161,31 @@ something other than your own work. `-VisualStudio` gives two of the rows a stan
 script so the Visual Studio buttons show, `-Root` and `-Name` put it elsewhere, and `-Remove` takes it
 away again.
 
+```powershell
+tools\screenshots.ps1
+```
+
+retakes the README's two pictures from that repository: it builds it afresh, runs the app
+against it and captures the main window and Options. The copy it runs has a settings file of its
+own (`WORKTREEHELPER_SETTINGS`), and with it its own single-instance lock, so a copy you have
+running is left alone. It runs in demo mode (`WORKTREEHELPER_DEMO=1`), which gives the picture a
+pull request and two windows marked open, since the demo repository has no GitHub remote and
+nothing open, and skips the update check. The pictures come out at the display scaling of the
+machine; the README's are at 125%.
+
+```powershell
+tools\release.ps1 -DryRun
+tools\release.ps1
+```
+
+publishes the version `WorktreeHelper.csproj` names. Set `<Version>` and write that version's
+section at the top of `CHANGELOG.md`, commit everything else, and run it. It checks first — not
+already tagged, a changelog section with something in it, `main` on GitHub not moved on, nothing
+else uncommitted, `gh` signed in, the tests passing — then retakes the pictures, commits
+"Release *version*" with the changelog, version and pictures, builds and zips the exe, pushes to
+`main`, tags it and publishes the GitHub release with the changelog section as its text.
+`-DryRun` stops after the pictures, with nothing committed or published.
+
 ## Symbolic links and junctions
 
 A folder reached through a link has two names — `C:\git\repo` may be a link to `D:\git\repo` —
@@ -187,7 +213,7 @@ While nothing has the worktree open, one button asks which way in is wanted:
   its installer, rather than by guessing at a path.
 
 Once either way is open, that single button becomes one per way: the open one carries the accent
-bar and focuses its window, the other starts the second instance with no further asking. Two instances on one
+ring and focuses its window, the other starts the second instance with no further asking. Two instances on one
 worktree — the Windows solution and the folder — is a supported way to work. With **a second
 Visual Studio** turned off in Options, only the open one's button stays, and all it does is
 bring that window forward.
@@ -212,7 +238,8 @@ sign-in dialog by a background refresh ([`GitHubToken.cs`](GitHubToken.cs), whic
 uses too). Where none of those answer, no buttons appear. A public repository needs none of it.
 
 > VS Code exposes no API for "which folders are open", and its process list only ever names the
-> folder the *first* window was launched with, so that detection matches window titles instead.
+> folder the *first* window was launched with, so that detection matches window titles instead,
+> as it does for Git Extensions, whose title is `folder (branch) - Git Extensions`.
 > Because `window.title` is user-configurable, every `" - "`-separated segment is compared
 > against the worktree's folder name rather than assuming the default template. Two folders
 > sharing a leaf name are therefore indistinguishable.
@@ -235,7 +262,11 @@ uses too). Where none of those answer, no buttons appear. A public repository ne
 | `Launcher.cs` | Finds and opens VS Code / terminal / Explorer / Git Extensions / the Visual Studio script |
 | `ExternalTool.cs` | A program a button opens: where it is, and whether its button is up |
 | `AppIcons.cs` | The icons of the programs the buttons open, asked of the shell |
+| `TopLevelWindows.cs` | A program's windows by title, and bringing one forward |
 | `VsCodeWindows.cs` | Finds and focuses the VS Code window that has a worktree open |
+| `GitExtensionsWindows.cs` | The same for Git Extensions |
+| `OpenMark.cs` | Marks a button whose program already has the worktree open |
+| `Demo.cs` | The demo mode the README's pictures are taken in |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |
 | `VisualStudioInstance.cs` | One instance: what it has open, and which of the two ways |
 | `PullRequests.cs` | The open pull requests of the repository, by branch |

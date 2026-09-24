@@ -784,13 +784,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AnnounceUpdate();
     }
 
-    private void TrayShowInTaskbar_Click(object sender, RoutedEventArgs e)
-    {
-        // WPF has already flipped IsChecked to what was asked for by the time this runs.
-        var wanted = (sender as MenuItem)?.IsChecked ?? ShowInTaskbar;
-        ApplyShowInTaskbar(wanted);
-    }
-
     /// <summary>
     /// Switches the taskbar button on or off and remembers it.
     /// </summary>
@@ -811,8 +804,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CloseHint));
         OnPropertyChanged(nameof(LivesInTaskbar));
 
-        // Asked from the tray menu with the window put away, the tray icon just went and a
-        // hidden window has no taskbar button: without this, the app would be nowhere at all.
+        // Asked with the window put away, the tray icon just went and a hidden window has no
+        // taskbar button: without this, the app would be nowhere at all. Options shows the
+        // window before it opens, so this is a guard rather than a path taken today.
         if (wanted && !IsVisible) ShowFromTray();
 
         TitleBar.Match(this);
@@ -1015,7 +1009,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     private async Task CheckForUpdateAsync()
     {
-        if (IsUpdating) return;
+        if (IsUpdating || Demo.IsOn) return;
         var (answered, release) = await UpdateService.CheckAsync();
 
         // Offline or rate-limited says nothing about the release already found, and an
@@ -1289,10 +1283,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (menu.Items[i] is FrameworkElement { Tag: Worktree or TrayWorktreeMarker })
                 menu.Items.RemoveAt(i);
 
-        // The tick can be made stale by anything that edits the settings file, so it is read
-        // afresh rather than left where it was last put.
-        if (FindTrayItem(menu, TrayTaskbarTag) is { } taskbar) taskbar.IsChecked = ShowInTaskbar;
-
         if (Worktrees.Count == 0) return;
 
         // Straight below "Show Worktree Helper", found rather than assumed: a fixed index here
@@ -1319,7 +1309,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Worktree nor TrayWorktreeMarker survives PopulateTrayMenu's sweep, which is what keeps
     // these in place; the values are what the markup sets.
     private const string TrayShowTag = "tray.show";
-    private const string TrayTaskbarTag = "tray.taskbar";
 
     private static MenuItem? FindTrayItem(ContextMenu menu, string tag)
         => menu.Items.OfType<MenuItem>().FirstOrDefault(i => (i.Tag as string) == tag);
@@ -1374,7 +1363,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _updatingOpenState;
     private bool _openStateStale;
 
-    /// <summary>Flags the worktrees that already have a VS Code or Visual Studio window.</summary>
+    /// <summary>Flags the worktrees that already have a VS Code, Git Extensions or Visual Studio window.</summary>
     /// <remarks>
     /// A request arriving mid-run is remembered and served by another pass rather than
     /// dropped: activating the window during a refresh used to leave the flags stale until
@@ -1403,10 +1392,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var flags = await Task.Run(() =>
                 {
                     var codeNames = VsCodeWindows.OpenFolderNames();
+                    var gitExtensionsNames = GitExtensionsWindows.OpenFolderNames();
                     var studio = VisualStudioInstances.Open();
                     return targets
                         .Select(w => (
                             Code: codeNames.Contains(w.Name),
+                            GitExtensions: gitExtensionsNames.Contains(w.Name),
                             Solution: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Solution),
                             Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder)))
                         .ToArray();
@@ -1415,6 +1406,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 for (var i = 0; i < targets.Count; i++)
                 {
                     targets[i].IsOpenInVsCode = flags[i].Code;
+                    targets[i].IsOpenInGitExtensions = flags[i].GitExtensions;
+                    if (Demo.IsOn) Demo.MarkOpen(targets[i]);
                     targets[i].IsSolutionOpen = flags[i].Solution;
                     targets[i].IsFolderOpen = flags[i].Folder;
                 }
@@ -1433,6 +1426,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var targets = Worktrees.Where(w => w.Branch.Length > 0).ToList();
         if (targets.Count == 0) return;
+
+        if (Demo.IsOn)
+        {
+            foreach (var worktree in targets) worktree.PullRequest = Demo.PullRequestFor(worktree);
+            return;
+        }
 
         // Null when GitHub could not be asked, which leaves the buttons as they were rather
         // than taking them all away until it can.
@@ -1913,7 +1912,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         });
     private void MenuOpenTerminal_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenTerminal, wt.Path, "terminal"));
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
-    private void MenuOpenGitExtensions_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(OpenInGitExtensions, wt.Path, "Git Extensions"));
+    private void MenuOpenGitExtensions_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenGitExtensions(wt.Path));
 
     private const string RowGitExtensionsTag = "row.gitextensions";
 
@@ -2152,14 +2151,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void OpenTerminal_Click(object sender, RoutedEventArgs e) => RunAction(sender, Launcher.OpenTerminal, "terminal");
     private void OpenExplorer_Click(object sender, RoutedEventArgs e) => RunAction(sender, Launcher.OpenInExplorer, "Explorer");
-    private void OpenGitExtensions_Click(object sender, RoutedEventArgs e) => RunAction(sender, OpenInGitExtensions, "Git Extensions");
-
-    private void OpenInGitExtensions(string folder)
+    private void OpenGitExtensions_Click(object sender, RoutedEventArgs e)
     {
-        // Removed since the last look, which is only found out by trying.
-        var exe = GitExtensionsTool.Path ?? throw new FileNotFoundException("Git Extensions is not installed.");
-        Launcher.OpenInGitExtensions(exe, folder);
+        if ((sender as Button)?.Tag is string folder) OpenGitExtensions(folder);
     }
+
+    /// <summary>
+    /// Brings back the Git Extensions window already browsing this worktree, or starts one,
+    /// the way the VS Code button does.
+    /// </summary>
+    private void OpenGitExtensions(string folder)
+    {
+        try
+        {
+            if (GitExtensionsWindows.TryFocus(folder))
+            {
+                Report($"Focused Git Extensions: {folder}");
+                return;
+            }
+            // Removed since the last look, which is only found out by trying.
+            var exe = GitExtensionsTool.Path ?? throw new FileNotFoundException("Git Extensions is not installed.");
+            Launcher.OpenInGitExtensions(exe, folder);
+            Report($"Opened Git Extensions: {folder}");
+            _ = WatchForGitExtensionsWindowAsync(folder);
+        }
+        catch (Exception ex)
+        {
+            Fail($"Could not open Git Extensions: {ex.Message}");
+        }
+    }
+
+    /// <summary>Git Extensions puts its window up in a few seconds, and names the worktree in it once loaded.</summary>
+    private Task WatchForGitExtensionsWindowAsync(string folder)
+        => WatchForWindowAsync(folder, w => w.IsOpenInGitExtensions, attempts: 15, TimeSpan.FromSeconds(1));
 
     private void RunAction(object sender, Action<string> action, string what)
     {

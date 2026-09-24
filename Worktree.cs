@@ -177,6 +177,23 @@ public sealed class Worktree : INotifyPropertyChanged
         }
     }
 
+    private bool _isOpenInGitExtensions;
+
+    /// <summary>
+    /// A Git Extensions window is browsing this worktree, so its button brings that window
+    /// back instead of starting another. A snapshot, like <see cref="IsOpenInVsCode"/>.
+    /// </summary>
+    public bool IsOpenInGitExtensions
+    {
+        get => _isOpenInGitExtensions;
+        set
+        {
+            if (_isOpenInGitExtensions == value) return;
+            _isOpenInGitExtensions = value;
+            Raise(nameof(IsOpenInGitExtensions));
+        }
+    }
+
     private bool _isSolutionOpen;
     private bool _isFolderOpen;
 

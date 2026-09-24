@@ -79,7 +79,15 @@ public sealed class Settings
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
 
-    private static readonly string FilePath = Path.Combine(
+    /// <summary>
+    /// A settings file of its own, named by the WORKTREEHELPER_SETTINGS environment variable,
+    /// for a copy run beside the user's own without reading or writing theirs: the one
+    /// tools\screenshots.ps1 takes the README's pictures with. Null for the usual file.
+    /// </summary>
+    public static string? OverridePath { get; } =
+        Environment.GetEnvironmentVariable("WORKTREEHELPER_SETTINGS") is { Length: > 0 } path ? Path.GetFullPath(path) : null;
+
+    private static readonly string FilePath = OverridePath ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "WorktreeHelper", "settings.json");
 

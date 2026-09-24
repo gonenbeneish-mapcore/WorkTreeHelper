@@ -18,7 +18,13 @@ internal static class SingleInstance
     public static bool TryAcquire()
     {
         // Local\ scopes the name to the logon session, so two signed-in users each get one.
-        _held = new Mutex(initiallyOwned: true, @"Local\WorktreeHelper.SingleInstance", out var isFirst);
+        // A copy with a settings file of its own is one of its own: it neither hands over to
+        // the user's running copy nor takes the user's copy's place.
+        var name = @"Local\WorktreeHelper.SingleInstance";
+        if (Settings.OverridePath is { } own)
+            name += "." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(own.ToUpperInvariant())))[..16];
+        _held = new Mutex(initiallyOwned: true, name, out var isFirst);
         if (isFirst) return true;
 
         _held.Dispose();
