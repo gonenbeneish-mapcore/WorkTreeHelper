@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.2
+
+- Fixed: a refresh no longer leaves a stale `index.lock` behind that blocks git in a worktree.
+
 ## v1.6.1
 
 - Bug fixes and stability improvements.
