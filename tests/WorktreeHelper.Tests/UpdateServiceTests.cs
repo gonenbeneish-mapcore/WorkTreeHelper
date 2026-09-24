@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using WorktreeHelper;
 using Xunit;
 
@@ -174,5 +176,112 @@ public class ParseReleaseTests
         // Whatever the test host reports, the check needs something to compare against.
         Assert.NotNull(UpdateService.Current);
         Assert.True(UpdateService.Current >= new Version(0, 0, 0));
+    }
+}
+
+public class UpdateCheckTests
+{
+    private const string Newer = """
+        {
+          "tag_name": "v9.0.0", "name": "v9.0.0", "draft": false, "prerelease": false,
+          "html_url": "https://github.com/owner/repo/releases/tag/v9.0.0",
+          "assets": [ { "name": "App-V9.0.0.zip", "browser_download_url": "https://github.com/owner/repo/releases/download/v9.0.0/App-V9.0.0.zip" } ]
+        }
+        """;
+
+    private static readonly Version Running = new(1, 0, 0);
+
+    [Fact]
+    public async Task A_token_the_machine_keeps_is_sent()
+    {
+        var github = new FakeGitHub(HttpStatusCode.OK);
+
+        var (answered, release) = await Check(github, token: "abc");
+
+        Assert.True(answered);
+        Assert.Equal(new Version(9, 0, 0), release!.Version);
+        Assert.Equal(["Bearer abc"], github.Authorizations);
+    }
+
+    [Fact]
+    public async Task Without_a_token_the_check_goes_anonymously()
+    {
+        var github = new FakeGitHub(HttpStatusCode.OK);
+
+        var (answered, _) = await Check(github, token: null);
+
+        Assert.True(answered);
+        Assert.Equal([null], github.Authorizations);
+    }
+
+    [Fact]
+    public async Task A_token_that_is_refused_is_dropped_and_the_check_asked_again()
+    {
+        // An expired or revoked token is refused even for a public release.
+        var github = new FakeGitHub(HttpStatusCode.Unauthorized, HttpStatusCode.OK);
+
+        var (answered, release) = await Check(github, token: "expired");
+
+        Assert.True(answered);
+        Assert.NotNull(release);
+        Assert.Equal(["Bearer expired", null], github.Authorizations);
+    }
+
+    [Fact]
+    public async Task A_token_lookup_that_fails_leaves_the_check_anonymous_not_unanswered()
+    {
+        // gh or a credential helper that errors, or the lookup timing out.
+        var github = new FakeGitHub(HttpStatusCode.OK);
+
+        var (answered, release) = await UpdateService.CheckAsync(
+            new HttpClient(github), _ => throw new OperationCanceledException(), Running, default);
+
+        Assert.True(answered);
+        Assert.NotNull(release);
+        Assert.Equal([null], github.Authorizations);
+    }
+
+    [Fact]
+    public async Task Rate_limited_is_no_answer_rather_than_nothing_new()
+    {
+        // What GitHub says once an IP address has used its 60 anonymous calls for the hour.
+        var github = new FakeGitHub(HttpStatusCode.Forbidden);
+
+        var (answered, release) = await Check(github, token: null);
+
+        Assert.False(answered);
+        Assert.Null(release);
+    }
+
+    [Fact]
+    public async Task A_release_no_newer_than_this_copy_is_an_answer_with_nothing_in_it()
+    {
+        var github = new FakeGitHub(HttpStatusCode.OK);
+
+        var (answered, release) = await UpdateService.CheckAsync(
+            new HttpClient(github), _ => Task.FromResult<string?>(null), new Version(9, 0, 0), default);
+
+        Assert.True(answered);
+        Assert.Null(release);
+    }
+
+    private static Task<(bool Answered, ReleaseInfo? Release)> Check(FakeGitHub github, string? token)
+        => UpdateService.CheckAsync(new HttpClient(github), _ => Task.FromResult(token), Running, default);
+
+    /// <summary>Answers each request with the next status in turn, noting how it was signed.</summary>
+    private sealed class FakeGitHub(params HttpStatusCode[] statuses) : HttpMessageHandler
+    {
+        private int _next;
+        public List<string?> Authorizations { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Authorizations.Add(request.Headers.Authorization?.ToString());
+            var status = statuses[Math.Min(_next++, statuses.Length - 1)];
+            return Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(status == HttpStatusCode.OK ? Newer : """{ "message": "no" }"""),
+            });
+        }
     }
 }

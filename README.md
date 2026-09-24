@@ -23,7 +23,7 @@ pick the folder, or drag it onto the window. Any folder inside the project will 
 the rest by itself. It remembers, so this is a first-run thing.
 
 **Open one.** The buttons at the right of each row, in order, each showing the icon of what it
-opens. A short accent bar under one means that window is already open.
+opens. A short accent bar under VS Code or Visual Studio means that window is already open.
 
 | Button | Opens |
 |---|---|
@@ -31,12 +31,12 @@ opens. A short accent bar under one means that window is already open.
 | Terminal | A **terminal** in that folder: Windows Terminal, or PowerShell without it. |
 | Explorer | That folder in **File Explorer**. |
 | Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
-| Visual Studio | **Visual Studio** — only appears for projects set up for it, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
+| Visual Studio | **Visual Studio** — only for projects set up for it, and where Visual Studio is installed, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
 | GitHub | The open **pull request** for that branch, in your browser. Only on branches that have one. |
 
-Any of them can be turned off in **Options**. **Right-click a row** for the same things, turned
-off or not, plus **Copy path** and **Copy branch name**. Hovering a
-row shows its full path, and hovering the counts says what they mean in words.
+Any of them can be turned off in **Options**. **Right-click a row** for the same things, whether
+their buttons are showing or not, plus **Copy path** and **Copy branch name**. Hovering a row
+shows its full path, and hovering the counts says what they mean in words.
 
 ## Where it lives
 
@@ -57,15 +57,15 @@ straight away.
 
 The gear in the title bar opens them; every change applies as you make it.
 
-![The Options window: the repository's path with Browse and Open, where the app lives, whether a second Visual Studio is allowed, and how the buttons are laid out](docs/options.png)
+![The Options window: the repository's path with Browse and Open, where the app lives, whether a second Visual Studio is allowed, which buttons the rows carry, and how they are laid out](docs/options.png)
 
 | Option | Choices |
 |---|---|
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
-| **A second Visual Studio** | **Allowed** (the default): once the solution or the folder is open, the row offers the other one too. **Not allowed**: it only offers to bring back the one that is open. |
-| **Buttons** | Which buttons the rows carry; all of them by default. VS Code, Git Extensions and Visual Studio are unticked on a computer that does not have them, and ticking one then offers to find its `.exe` yourself, which is remembered. |
-| **Layout** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every `PR` lines up, with a gap in a row that has none. |
+| **Visual Studio** | *Allow a second Visual Studio on the same worktree* (on by default): once the solution or the folder is open, the row offers the other one too. Off: it only offers to bring back the one that is open. |
+| **Buttons** | Which of the six buttons the rows carry, each shown with its icon; all of them by default. VS Code, Git Extensions and Visual Studio are unticked on a computer that does not have them, and ticking one then offers to **Locate** its `.exe` yourself, which is remembered. A button turned off is still on the row's right-click menu. |
+| **Layout** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every pull request button lines up, with a gap in a row that has none. |
 
 ## Install
 
@@ -76,14 +76,15 @@ It needs:
 
 | Requirement | Why |
 |---|---|
-| **.NET 10 Desktop Runtime**, x64 | The exe is ~400 KB: it carries the app, not the runtime. The *Desktop* runtime, not the plain one — this is WPF. <https://dotnet.microsoft.com/download/dotnet/10.0> |
+| **.NET 10 Desktop Runtime**, x64 | The exe is ~500 KB: it carries the app, not the runtime. The *Desktop* runtime, not the plain one — this is WPF. <https://dotnet.microsoft.com/download/dotnet/10.0> |
 | **`git` on PATH** | Every listing is `git worktree list` / `git status` under the hood. |
 | Windows 10 or 11, x64 | Published `win-x64`. |
 
 VS Code, Git Extensions and Visual Studio are optional — a button whose program is missing does
-not appear, and one installed somewhere unusual can be pointed at in Options. The terminal
-button falls back to PowerShell without Windows Terminal. The exe is unsigned, so Windows shows a SmartScreen prompt the first time
-(**More info** → **Run anyway**).
+not appear, and one installed somewhere unusual can be pointed at in Options. Without VS Code's
+button, double-clicking a row still tries `code` on PATH. The terminal button falls back to
+PowerShell without Windows Terminal. The exe is unsigned, so Windows shows a SmartScreen prompt
+the first time (**More info** → **Run anyway**).
 
 ## Updating
 
@@ -99,11 +100,19 @@ is kept as `WorktreeHelper.exe.old` until the next start. Drafts and pre-release
 offered, and a check that finds nothing says nothing. Updating needs write access to wherever the
 exe sits, so a copy under `Program Files` will report that it cannot install itself.
 
+The check signs in to GitHub where this machine already keeps a token — the same places the
+[pull request button](#the-pull-request-button) looks — because anonymous calls share 60 an hour
+with everyone on the same network, and an office can use them up; signed in, each person has
+5,000. With no token it asks anonymously, and a token GitHub refuses is dropped and the check asked
+again without it. A check GitHub turns away is no answer, not an answer of nothing new.
+
 ## Other things worth knowing
 
 - **One instance.** Launching it again shows the copy already running.
 - **It sizes itself** to the list, capped to the monitor, and parks in the corner by the
-  notification area until you move it — then it remembers where you put it.
+  notification area until you move it — then it remembers where you put it. It opens at once as
+  its title bar, so it can be moved or closed straight away, and slides to size once the list has
+  been read; every later change of size slides too.
 - **The pin** keeps the window above other windows, and survives a restart.
 - **The icon follows your theme**: a dark disc on a light taskbar, a pale one on a dark
   taskbar, so it stays findable either way. Clicking it in the title bar opens the app’s
@@ -135,8 +144,9 @@ for. Drawn at each size rather than scaled down from one large bitmap, so 16px s
 test.cmd
 ```
 
-covers the parsers, the update service, the symbolic-link rewriting, the options, what's new and
-the icon's frame picking — the places the bugs actually were. The link tests build junctions in `%TEMP%`, which needs no elevation; where even
+covers the parsers, the update service and its sign-in, the symbolic-link rewriting, the options
+and the button choices, pull requests, what's new and the icon's frame picking — the places the
+bugs actually were. The link tests build junctions in `%TEMP%`, which needs no elevation; where even
 that is refused they assert nothing rather than failing on the environment.
 
 ```powershell
@@ -147,7 +157,7 @@ builds `demo\rubber-duck`, which git ignores: a throwaway repository whose four 
 are each left in a different state — clean, files open, commits to push, commits to pull —
 which is what the picture at the top of this file is of. Handy for trying a change against
 something other than your own work. `-VisualStudio` gives two of the rows a stand-in Visual Studio
-script so the VS button shows, `-Root` and `-Name` put it elsewhere, and `-Remove` takes it
+script so the Visual Studio buttons show, `-Root` and `-Name` put it elsewhere, and `-Remove` takes it
 away again.
 
 ## Symbolic links and junctions
@@ -163,8 +173,9 @@ the link keeps the path git gave.
 ## The Visual Studio button
 
 Opt-in by convention rather than configuration: a worktree whose root holds
-**`CreateVS-2026.bat`** gets a `VS` button. Repositories without such a script show nothing
-there, which is why the rest of the app works anywhere.
+**`CreateVS-2026.bat`** gets Visual Studio buttons, where Visual Studio is installed or has been
+located in Options. Repositories without such a script show nothing there, which is why the rest
+of the app works anywhere.
 
 While nothing has the worktree open, one button asks which way in is wanted:
 
@@ -175,8 +186,8 @@ While nothing has the worktree open, one button asks which way in is wanted:
   builds configured through CMake. Visual Studio is located through `vswhere`, which ships with
   its installer, rather than by guessing at a path.
 
-Once either way is open, that single button becomes one per way: the open one tints and focuses
-its window, the other starts the second instance with no further asking. Two instances on one
+Once either way is open, that single button becomes one per way: the open one carries the accent
+bar and focuses its window, the other starts the second instance with no further asking. Two instances on one
 worktree — the Windows solution and the folder — is a supported way to work. With **a second
 Visual Studio** turned off in Options, only the open one's button stays, and all it does is
 bring that window forward.
@@ -190,15 +201,15 @@ the two do not share a Running Object Table.
 
 ## The pull request button
 
-A worktree whose branch has an open pull request gets a `PR` button at the end of its row, which
-opens it in the default browser; hovering names and numbers it, and says if it is still a draft.
+A worktree whose branch has an open pull request gets a button carrying GitHub's mark at the end
+of its row, which opens it in the default browser; hovering names and numbers it, and says if it is still a draft.
 The repository is taken from `remote.origin.url`, so this needs no configuration and nothing
 installed — but a **private** repository needs a token to read, and the app will not ask you for
 one. It looks in `GH_TOKEN`, `GITHUB_TOKEN`, then `gh auth token` if the GitHub CLI happens to be
 installed, then git's own credential helper, which is invoked with `credential.interactive=false`
 and `GIT_TERMINAL_PROMPT=0` so that a machine with nothing stored cannot be made to raise a
-sign-in dialog by a background refresh. Where none of those answer, no buttons appear. A public
-repository needs none of it.
+sign-in dialog by a background refresh ([`GitHubToken.cs`](GitHubToken.cs), which the update check
+uses too). Where none of those answer, no buttons appear. A public repository needs none of it.
 
 > VS Code exposes no API for "which folders are open", and its process list only ever names the
 > folder the *first* window was launched with, so that detection matches window titles instead.
@@ -210,11 +221,12 @@ repository needs none of it.
 
 | File | Purpose |
 |------|---------|
-| `App.xaml(.cs)` | Fluent theme following the OS theme; the single-instance gate |
+| `App.xaml(.cs)` | Fluent theme following the OS theme; the single-instance gate; the GitHub mark and icon style both windows share |
 | `SingleInstance.cs` | Mutex plus a broadcast that raises the copy already running |
 | `app.manifest` | PerMonitorV2 DPI awareness, long paths |
 | `MainWindow.xaml(.cs)` | UI and view logic |
 | `OptionsWindow.xaml(.cs)` | The options, bound straight to the main window’s own properties |
+| `ProgramNotFoundWindow.xaml(.cs)` | Says a button's program is missing, and offers to locate its exe |
 | `TitleBar.cs` | Caption colour and rounded corners, via DWM |
 | `GitService.cs` | Runs and parses `git worktree list --porcelain` and `git status --porcelain=v2` |
 | `TrayIcon.cs` | The notification-area icon, straight through `Shell_NotifyIcon` |
@@ -222,17 +234,22 @@ repository needs none of it.
 | `LinkPaths.cs` | Rewrites git's paths back through the symbolic link you picked |
 | `Launcher.cs` | Finds and opens VS Code / terminal / Explorer / Git Extensions / the Visual Studio script |
 | `ExternalTool.cs` | A program a button opens: where it is, and whether its button is up |
+| `AppIcons.cs` | The icons of the programs the buttons open, asked of the shell |
 | `VsCodeWindows.cs` | Finds and focuses the VS Code window that has a worktree open |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |
 | `VisualStudioInstance.cs` | One instance: what it has open, and which of the two ways |
 | `PullRequests.cs` | The open pull requests of the repository, by branch |
+| `GitHubToken.cs` | A GitHub token the machine already keeps, for pull requests and the update check |
+| `Commands.cs` | Runs git and gh quietly, for the GitHub lookups |
 | `UpdateService.cs` | Finds a newer GitHub release, and installs it over this copy |
 | `MonitorWorkArea.cs` | Work area of the monitor the window is on, for the auto-size cap |
 | `AppIcon.cs` | Picks the icon colourway that suits the theme, and builds the tray’s copy of it |
 | `Settings.cs` | JSON settings in `%APPDATA%` |
 | `WhatsNew.cs` | Reads the changelog compiled into the exe, for the first run of a new version |
 | `SlotVisibility.cs` | Whether a row's button shows, holds its column open, or takes no room |
-| `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service, the link rewriting and the options |
+| `BoolToVisibilityConverter.cs` | The small converters the bindings use |
+| `Worktree.cs` | One row: a worktree, and what its buttons and counts show |
+| `tests\WorktreeHelper.Tests` | xunit cover for the parsers, the update service and its sign-in, the link rewriting, the options and button choices |
 
 ## License
 

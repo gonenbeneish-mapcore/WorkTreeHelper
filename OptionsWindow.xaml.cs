@@ -31,8 +31,12 @@ public partial class OptionsWindow : Window
         TitleBar.Match(this);
     }
 
+    /// <summary>The window has closed, and cannot own a dialog any more.</summary>
+    private bool _closed;
+
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         // A closed window can outlive its closing by a long way, and while it holds the main
         // window as its data it is still bound to every option, answering each change.
         DataContext = null;
@@ -70,7 +74,9 @@ public partial class OptionsWindow : Window
             // A fresh look first: it may have been installed since, or the first look at
             // startup may not have finished.
             await _owner.LocateToolsAsync();
-            if (tool.Found || LocateByHand(tool)) tool.Wanted = true;
+            // Options may have been closed while that looked, and a closed window cannot own
+            // the dialog that asks for the program: WPF throws, and nothing would catch it.
+            if (tool.Found || (!_closed && LocateByHand(tool))) tool.Wanted = true;
         }
         finally
         {

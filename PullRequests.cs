@@ -1,8 +1,5 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 
 namespace WorktreeHelper;
@@ -20,11 +17,9 @@ public sealed record GitHubRepo(string Owner, string Name);
 /// <remarks>
 /// Asked of the GitHub API directly, over the owner and name taken from the remote, so this
 /// works for any repository on github.com and needs nothing installed. A public repository
-/// answers anonymously; a private one needs a token, which is looked for in the places a
-/// developer machine already keeps one — the usual environment variables, the GitHub CLI if it
-/// happens to be there, and finally git's own credential helper, asked in a way that cannot
-/// pop a prompt. Where none of that yields anything, no branch has a pull request as far as
-/// this app is concerned: no buttons, and nothing said.
+/// answers anonymously; a private one needs a token, which <see cref="GitHubToken"/> looks for.
+/// Where it finds none, no branch has a pull request as far as this app is concerned: no
+/// buttons, and nothing said.
 /// </remarks>
 internal static class PullRequests
 {
@@ -47,14 +42,14 @@ internal static class PullRequests
     {
         try
         {
-            var remote = await RunAsync("git", "config --get remote.origin.url", repoPath, ct).ConfigureAwait(false);
+            var remote = await Commands.RunAsync("git", "config --get remote.origin.url", repoPath, ct).ConfigureAwait(false);
             if (ParseRemote(remote) is not { } repo) return Empty();
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
                 $"https://api.github.com/repos/{repo.Owner}/{repo.Name}/pulls?state=open&per_page=100");
 
-            if (await FindTokenAsync(repoPath, ct).ConfigureAwait(false) is { Length: > 0 } token)
+            if (await GitHubToken.FindAsync(repoPath, ct).ConfigureAwait(false) is { Length: > 0 } token)
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
@@ -145,92 +140,4 @@ internal static class PullRequests
         => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
-
-    /// <summary>
-    /// A token for the API, from wherever this machine already keeps one. Null when it keeps
-    /// none, which still leaves public repositories answerable.
-    /// </summary>
-    private static async Task<string?> FindTokenAsync(string repoPath, CancellationToken ct)
-    {
-        foreach (var name in new[] { "GH_TOKEN", "GITHUB_TOKEN" })
-            if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } fromEnvironment)
-                return fromEnvironment;
-
-        // Only if it is installed; this is not a dependency, just a place to look.
-        if ((await RunAsync("gh", "auth token", repoPath, ct).ConfigureAwait(false)).Trim() is { Length: > 0 } fromCli)
-            return fromCli;
-
-        return await FromCredentialHelperAsync(repoPath, ct).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Asks git for the credential it already holds for github.com.
-    /// </summary>
-    /// <remarks>
-    /// Interactivity is turned off twice over — the config switch and the environment variable
-    /// — because a credential helper with nothing stored would otherwise put a sign-in dialog
-    /// on screen, which is not a thing a background check should ever do.
-    /// </remarks>
-    private static async Task<string?> FromCredentialHelperAsync(string repoPath, CancellationToken ct)
-    {
-        var output = await RunAsync(
-            "git", "-c credential.interactive=false credential fill", repoPath, ct,
-            input: "protocol=https\nhost=github.com\n\n",
-            environment: ("GIT_TERMINAL_PROMPT", "0")).ConfigureAwait(false);
-
-        foreach (var line in output.Split('\n'))
-            if (line.StartsWith("password=", StringComparison.Ordinal))
-                return line["password=".Length..].Trim();
-
-        return null;
-    }
-
-    /// <summary>Runs a command and returns its output, or "" if it is missing or fails.</summary>
-    private static async Task<string> RunAsync(
-        string file, string arguments, string workingDirectory, CancellationToken ct,
-        string? input = null, (string Name, string Value)? environment = null)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = file,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = input is not null,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-        if (environment is { } variable) psi.Environment[variable.Name] = variable.Value;
-
-        Process proc;
-        try
-        {
-            proc = Process.Start(psi) ?? throw new Win32Exception($"{file} did not start.");
-        }
-        catch (Win32Exception)
-        {
-            // Not installed. That is an answer, not a failure.
-            return "";
-        }
-
-        using (proc)
-        using (ct.Register(() => { try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { } }))
-        {
-            if (input is not null)
-            {
-                await proc.StandardInput.WriteAsync(input).ConfigureAwait(false);
-                proc.StandardInput.Close();
-            }
-
-            var output = proc.StandardOutput.ReadToEndAsync(ct);
-            var error = proc.StandardError.ReadToEndAsync(ct);
-            await proc.WaitForExitAsync(ct).ConfigureAwait(false);
-            await error.ConfigureAwait(false);
-
-            return proc.ExitCode == 0 ? await output.ConfigureAwait(false) : "";
-        }
-    }
 }

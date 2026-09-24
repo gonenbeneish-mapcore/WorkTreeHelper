@@ -427,8 +427,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// Looks for the programs again, each on its own so a slow one holds up only its own
     /// button: Visual Studio is found by starting a process, the others by checking a file.
     /// </summary>
+    /// <remarks>
+    /// A look that started before the user picked an exe by hand is dropped: it was made
+    /// without that exe, and would take away the button the user had just got back.
+    /// </remarks>
     public Task LocateToolsAsync()
-        => Task.WhenAll(Tools.Select(async tool => tool.Path = await Task.Run(tool.Look)));
+        => Task.WhenAll(Tools.Select(async tool =>
+        {
+            var chosen = tool.Chosen;
+            var found = await Task.Run(tool.Look);
+            if (tool.Chosen == chosen) tool.Path = found;
+        }));
 
     public bool ShowTerminalButton
     {
@@ -723,12 +732,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 // handler above.
                 if (msg == WM_SETTINGCHANGE) Dispatcher.BeginInvoke(ApplyIcon);
 
+                // The user has started dragging the window; a slide must not fight them for it.
+                if (msg == WM_ENTERSIZEMOVE) OnUserMoveStarting();
+
                 return IntPtr.Zero;
             });
     }
 
     /// <summary>Windows broadcasts this when a setting changes, the theme among them.</summary>
     private const int WM_SETTINGCHANGE = 0x001A;
+    private const int WM_ENTERSIZEMOVE = 0x0231;
 
     /// <summary>
     /// Puts the colourway that suits the current theme on the title bar, the taskbar button
@@ -1541,6 +1554,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return new Rect(left, top, width, height);
     }
 
+    /// <summary>The folds that are closing now.</summary>
+    private readonly HashSet<FrameworkElement> _folding = [];
+
     /// <summary>
     /// Takes a fold under the caption away by folding it shut, while the window shrinks by
     /// the same amount in the same time, so what is below it rises with the window's edge.
@@ -1553,10 +1569,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </remarks>
     private void FoldAway(FrameworkElement fold, Action hide)
     {
+        // Already on its way: a second click would measure it as still open, being held on
+        // screen while it closes, and send the window back to a size with room for it.
+        if (!_folding.Add(fold)) return;
+
         var height = fold.ActualHeight;
         hide();
         if (!IsVisible || height <= 0 || TargetBounds() is not { } to)
         {
+            _folding.Remove(fold);
             AutoSize();
             return;
         }
@@ -1577,6 +1598,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             fold.BeginAnimation(MarginProperty, null);
             fold.ClipToBounds = false;
             BindingOperations.GetBindingExpression(fold, VisibilityProperty)?.UpdateTarget();
+            _folding.Remove(fold);
+            // Anything that resized the window while the fold was closing measured it partway
+            // shut, and sized the window with room for what was left of it.
+            AutoSize();
         };
         fold.BeginAnimation(MarginProperty, gap);
         fold.BeginAnimation(HeightProperty, shut);
@@ -1614,6 +1639,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResizeFrame(object? sender, EventArgs e)
     {
+        // Minimised partway, by Esc in the taskbar: the rest of the slide would drag the
+        // minimised window back out of wherever the shell parked it.
+        if (WindowState != WindowState.Normal)
+        {
+            StopSlide();
+            return;
+        }
+
         var t = Math.Min(1, _resizeClock.Elapsed.TotalMilliseconds / ResizeDuration.TotalMilliseconds);
         // Ease out: quick to start, settling gently into place.
         var k = 1 - Math.Pow(1 - t, 3);
@@ -1622,9 +1655,34 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _resizeFrom.Y + (_resizeTo.Y - _resizeFrom.Y) * k,
             _resizeFrom.Width + (_resizeTo.Width - _resizeFrom.Width) * k,
             _resizeFrom.Height + (_resizeTo.Height - _resizeFrom.Height) * k);
-        SetBounds(_resizeNow);
+        // Where the window stays put, as it does once the user has placed it, only its size
+        // is set. Then a drag that starts partway is not pulled back to where it started.
+        SetBounds(_resizeNow, move: _resizeFrom.TopLeft != _resizeTo.TopLeft);
 
         if (t >= 1) JumpTo(_resizeTo);
+    }
+
+    /// <summary>
+    /// The user has taken hold of the window to move it. A slide still going would put it back
+    /// where the slide says, every frame, so the slide ends here, at the size it was going to.
+    /// </summary>
+    private void OnUserMoveStarting()
+    {
+        if (!_resizing) return;
+        var to = _resizeTo;
+        StopSlide();
+        _placingWindow = true;
+        Width = to.Width;
+        Height = to.Height;
+        _placingWindow = false;
+    }
+
+    private void StopSlide()
+    {
+        if (!_resizing) return;
+        CompositionTarget.Rendering -= ResizeFrame;
+        _resizing = false;
+        HoldScrollBar(false);
     }
 
     /// <summary>
@@ -1634,8 +1692,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void HoldScrollBar(bool hold)
         => ListScroller.VerticalScrollBarVisibility = hold ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Auto;
 
-    /// <summary>Moves and sizes the window at once, in DIPs.</summary>
-    private void SetBounds(Rect r)
+    /// <summary>Moves and sizes the window at once, in DIPs, or only sizes it.</summary>
+    private void SetBounds(Rect r, bool move = true)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
@@ -1644,7 +1702,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetWindowPos(hwnd, IntPtr.Zero,
             (int)Math.Round(r.X * dpi.DpiScaleX), (int)Math.Round(r.Y * dpi.DpiScaleY),
             (int)Math.Round(r.Width * dpi.DpiScaleX), (int)Math.Round(r.Height * dpi.DpiScaleY),
-            SWP_NOZORDER | SWP_NOACTIVATE);
+            SWP_NOZORDER | SWP_NOACTIVATE | (move ? 0 : SWP_NOMOVE));
         _placingWindow = false;
     }
 
@@ -1654,12 +1712,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     private void JumpTo(Rect r)
     {
-        if (_resizing)
-        {
-            CompositionTarget.Rendering -= ResizeFrame;
-            _resizing = false;
-            HoldScrollBar(false);
-        }
+        StopSlide();
         _placingWindow = true;
         Left = r.X;
         Top = r.Y;
@@ -1668,6 +1721,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _placingWindow = false;
     }
 
+    private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
 

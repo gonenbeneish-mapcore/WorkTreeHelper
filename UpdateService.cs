@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 
@@ -47,19 +49,76 @@ internal static class UpdateService
     /// not be asked — no network, rate-limited — which is not worth telling anyone about, but
     /// is not the same as hearing that there is nothing new.
     /// </summary>
-    public static async Task<(bool Answered, ReleaseInfo? Release)> CheckAsync(CancellationToken ct = default)
+    /// <remarks>
+    /// Asked with the user's own token where the machine keeps one. Anonymously, the check
+    /// shares 60 calls an hour with everyone behind the same IP address, and once those are
+    /// gone GitHub refuses it until the hour turns: an office could go an hour at a time
+    /// without hearing of a release. The token is looked for from the app's own folder, there
+    /// being no repository this check belongs to; that still finds the environment variables,
+    /// gh, and git's credential helper as configured for the user.
+    /// </remarks>
+    public static Task<(bool Answered, ReleaseInfo? Release)> CheckAsync(CancellationToken ct = default)
+        => CheckAsync(Http, FindTokenAsync, Current, ct);
+
+    /// <summary>
+    /// Longest the token is looked for. It runs gh and git, and a credential helper that
+    /// hangs must not hang the check with it, nor pile up another stuck process each Refresh.
+    /// </summary>
+    private static readonly TimeSpan TokenLookupLimit = TimeSpan.FromSeconds(10);
+
+    private static async Task<string?> FindTokenAsync(CancellationToken ct)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(TokenLookupLimit);
+        return await GitHubToken.FindAsync(AppContext.BaseDirectory, limit.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>The check itself, with what it talks to and what it compares against handed in.</summary>
+    internal static async Task<(bool Answered, ReleaseInfo? Release)> CheckAsync(
+        HttpClient http, Func<CancellationToken, Task<string?>> findToken, Version current, CancellationToken ct)
     {
         try
         {
-            var json = await Http.GetStringAsync(LatestRelease, ct).ConfigureAwait(false);
-            var release = ParseRelease(json);
-            return (true, release is not null && release.Version > Current ? release : null);
+            string? token;
+            try
+            {
+                token = await findToken(ct).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Timed out, or gh or git failed in some way of their own: asked anonymously,
+                // which is how every check was made before there were tokens.
+                token = null;
+            }
+            var response = await AskAsync(http, token, ct).ConfigureAwait(false);
+
+            // A token that has expired or been revoked is refused outright, even for a public
+            // release. Asked again without it, the check does no worse than it did before.
+            if (response.StatusCode == HttpStatusCode.Unauthorized && token is not null)
+            {
+                response.Dispose();
+                response = await AskAsync(http, null, ct).ConfigureAwait(false);
+            }
+
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode) return (false, null);
+                var release = ParseRelease(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                return (true, release is not null && release.Version > current ? release : null);
+            }
         }
         catch (Exception)
         {
             // Offline, rate-limited, or the shape changed: no answer today.
             return (false, null);
         }
+    }
+
+    private static async Task<HttpResponseMessage> AskAsync(HttpClient http, string? token, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, LatestRelease);
+        if (token is { Length: > 0 }) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await http.SendAsync(request, ct).ConfigureAwait(false);
     }
 
     /// <summary>Reads what the releases API returned. Null if it names no version or no zip.</summary>
