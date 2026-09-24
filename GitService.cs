@@ -180,6 +180,12 @@ public static class GitService
         };
         // Make git print paths without quoting/escaping non-ASCII characters.
         psi.Environment["LC_ALL"] = "C.UTF-8";
+        // Only look, never write. git status takes index.lock to save the index it refreshes on
+        // the way, and a status ended partway - a refresh overtaken by the next one ends its git
+        // at once - left that lock behind, and the worktree refusing every git command after it
+        // until the file was deleted by hand. This is what the switch is for: tools that read a
+        // repository in the background while the user works in it.
+        psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
 
         Process proc;
         try

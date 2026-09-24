@@ -162,3 +162,58 @@ public class MissingFolderTests
         Assert.Contains(gone, ex.Message);
     }
 }
+
+public class StatusLeavesNoLockTests
+{
+    [Fact]
+    public async Task Reading_the_status_never_writes_the_index()
+    {
+        // What git status would otherwise rewrite, taking index.lock to do it: a file whose
+        // time changed and whose content did not. A status ended partway through that left
+        // the lock behind, and the worktree refusing git until it was deleted by hand.
+        var repo = Path.Combine(Path.GetTempPath(), "WorktreeHelper.Tests." + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repo);
+        try
+        {
+            if (!Git(repo, "init -q") || !Git(repo, "config user.email test@example.invalid") ||
+                !Git(repo, "config user.name test")) return; // no git here: nothing to show
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "hello");
+            Assert.True(Git(repo, "add a.txt") && Git(repo, "commit -q -m one"));
+
+            File.SetLastWriteTimeUtc(Path.Combine(repo, "a.txt"), DateTime.UtcNow.AddMinutes(5));
+            var index = Path.Combine(repo, ".git", "index");
+            var before = File.GetLastWriteTimeUtc(index);
+
+            var status = await GitService.ReadStatusAsync(repo);
+
+            Assert.NotNull(status);
+            Assert.Equal(before, File.GetLastWriteTimeUtc(index));
+            Assert.False(File.Exists(index + ".lock"));
+        }
+        finally
+        {
+            try { Directory.Delete(repo, recursive: true); } catch { }
+        }
+    }
+
+    private static bool Git(string folder, string arguments)
+    {
+        try
+        {
+            using var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", arguments)
+            {
+                WorkingDirectory = folder,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            })!;
+            git.WaitForExit();
+            return git.ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+    }
+}
