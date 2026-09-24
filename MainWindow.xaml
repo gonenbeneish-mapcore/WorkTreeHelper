@@ -473,8 +473,20 @@
              names and "BRANCH" over the branches only said what the rows already show. -->
         <!-- The folds under the title bar, one above the other: the first-run question, and
              what is new in this version. In practice they never meet - someone new is asked
-             the question and has nothing to be told - but stacked, they could. -->
+             the question and has nothing to be told - but stacked, they could.
+
+             With no list under them yet, they keep the gap the list keeps below itself, rather
+             than sitting on the window's bottom edge. -->
         <StackPanel Grid.Row="1">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsListReady}" Value="False">
+                            <Setter Property="Margin" Value="0,0,0,4"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
         <!-- Asked once, on the first run, and never again. The window is already on screen at
              that point, so this costs no dialog. -->
         <Border x:Name="TaskbarQuestionFold" Margin="6,4,6,0" Padding="8,6" CornerRadius="6"

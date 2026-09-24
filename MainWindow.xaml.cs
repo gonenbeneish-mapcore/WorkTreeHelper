@@ -1530,8 +1530,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var work = MonitorWorkArea.For(this);
         var limit = new Size(Math.Min(work.Width, MaxAutoWidth), work.Height);
         root.Measure(limit);
+
+        // Whole pixels, rounded up. Rounded to the nearest, the window could come out a
+        // fraction narrower than asked, and wrapped text such as the what's-new notes then
+        // wraps its longest line once more: a line taller than was measured, so the last line
+        // of the notes, or the last row under them, was cut off at the bottom.
+        var dpi = VisualTreeHelper.GetDpi(this);
         var width = Math.Min(Math.Max(root.DesiredSize.Width, MinWidth), limit.Width);
+        width = Math.Min(Math.Ceiling(width * dpi.DpiScaleX) / dpi.DpiScaleX, limit.Width);
+
+        // The height at that width, which is not always the height asked for at the width the
+        // content wanted: the window is at least MinWidth, and text rewraps to what it is given.
+        root.Measure(new Size(width, limit.Height));
         var height = Math.Min(Math.Max(root.DesiredSize.Height, MinHeight), limit.Height);
+        height = Math.Min(Math.Ceiling(height * dpi.DpiScaleY) / dpi.DpiScaleY, limit.Height);
         // Measured against the limit, not the window; the window's own layout measures it
         // again at the size it ends up.
         root.InvalidateMeasure();
