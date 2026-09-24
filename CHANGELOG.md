@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.0
+
+- A **Git Extensions** button, where Git Extensions is installed.
+- Buttons show the icons of the programs they open; an accent bar marks one already open.
+- **Options** picks which buttons to show. A missing program can be located by hand.
+- The window opens instantly and slides to its size instead of jumping.
+- Options is wider and shorter.
+- Fixed: in columns, a row's last button no longer hangs past the window's edge.
+
 ## v1.5.0
 
 - **Options**, behind a gear in the title bar and on the app’s menu; each applies at once.

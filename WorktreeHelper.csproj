@@ -14,7 +14,7 @@
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Shown in Explorer's Properties/Details and by SmartScreen on an unsigned exe. -->
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
     <Product>Worktree Helper</Product>
     <AssemblyTitle>Worktree Helper</AssemblyTitle>
     <Description>Lists the worktrees of a git repository and opens them in VS Code, a terminal or Explorer.</Description>
