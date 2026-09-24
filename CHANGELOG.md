@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7.0
+
+- Git Extensions already open on a worktree is brought back rather than opened again.
+- An open window is marked by an accent ring round its button, easier to see than the bar.
+- The app's menu no longer has **Show in taskbar**; Options is where that is chosen.
+- Fixed: the window no longer opens a line too short, cutting off the end of what's new.
+- Fixed: showing the window again no longer resizes it and rebuilds its buttons when nothing
+  has changed.
+
 ## v1.6.2
 
 - Fixed: a refresh no longer leaves a stale `index.lock` behind that blocks git in a worktree.
