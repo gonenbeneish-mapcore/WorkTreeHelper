@@ -982,8 +982,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 continue;
             }
 
-            if (existing >= 0) Worktrees.RemoveAt(existing);
             incoming.AllowSecondVisualStudio = _settings.AllowSecondVisualStudio;
+            if (existing >= 0)
+            {
+                // Same folder, changed state: it looks as it did until this refresh has
+                // worked out what else is different.
+                incoming.TakeOverFrom(Worktrees[existing]);
+                Worktrees.RemoveAt(existing);
+            }
             Worktrees.Insert(i, incoming);
         }
     }
@@ -1393,23 +1399,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     var codeNames = VsCodeWindows.OpenFolderNames();
                     var gitExtensionsNames = GitExtensionsWindows.OpenFolderNames();
-                    var studio = VisualStudioInstances.Open();
-                    return targets
+                    var studio = VisualStudioInstances.Open(out var studioComplete);
+                    return (studioComplete, targets
                         .Select(w => (
                             Code: codeNames.Contains(w.Name),
                             GitExtensions: gitExtensionsNames.Contains(w.Name),
                             Solution: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Solution),
                             Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder)))
-                        .ToArray();
+                        .ToArray());
                 });
+                var (studioAnswered, found) = flags;
 
                 for (var i = 0; i < targets.Count; i++)
                 {
-                    targets[i].IsOpenInVsCode = flags[i].Code;
-                    targets[i].IsOpenInGitExtensions = flags[i].GitExtensions;
+                    targets[i].IsOpenInVsCode = found[i].Code;
+                    targets[i].IsOpenInGitExtensions = found[i].GitExtensions;
                     if (Demo.IsOn) Demo.MarkOpen(targets[i]);
-                    targets[i].IsSolutionOpen = flags[i].Solution;
-                    targets[i].IsFolderOpen = flags[i].Folder;
+                    // A Visual Studio too busy to answer - mid-build, say - is not one that has
+                    // closed. Taken as closed, the row's two Visual Studio buttons fell back to
+                    // the one that asks, and the window shrank and grew again when it next
+                    // answered. Until every instance answers, what is open can only be added to.
+                    targets[i].IsSolutionOpen = found[i].Solution || (!studioAnswered && targets[i].IsSolutionOpen);
+                    targets[i].IsFolderOpen = found[i].Folder || (!studioAnswered && targets[i].IsFolderOpen);
                 }
             }
             while (_openStateStale);
@@ -1471,8 +1482,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var statuses = await Task.WhenAll(targets.Select(w => GitService.ReadStatusAsync(w.Path, ct)));
             if (ct.IsCancellationRequested) return;
+            // A read that failed keeps what the row last showed: that is still the best there
+            // is, and taking the counts away until the next refresh made the row narrower and
+            // the window shrink, then grow back, for nothing that had changed.
             for (var i = 0; i < targets.Count; i++)
-                targets[i].Status = statuses[i];
+                targets[i].Status = statuses[i] ?? targets[i].Status;
         }
         catch (OperationCanceledException) { /* a newer refresh is already on its way */ }
     }

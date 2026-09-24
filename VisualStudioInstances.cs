@@ -25,9 +25,18 @@ internal static class VisualStudioInstances
     private const string DteMoniker = "VisualStudio.DTE";
 
     /// <summary>Every running instance that names something it has open.</summary>
-    public static List<VisualStudioInstance> Open()
+    public static List<VisualStudioInstance> Open() => Open(out _);
+
+    /// <summary>Every running instance that names something it has open.</summary>
+    /// <param name="complete">
+    /// False when some instance could not be asked this time, being busy: then what it has
+    /// open is not known, rather than known to be nothing, and a caller should not take its
+    /// absence from the list as its window having closed.
+    /// </param>
+    public static List<VisualStudioInstance> Open(out bool complete)
     {
         var found = new List<VisualStudioInstance>();
+        complete = true;
 
         if (GetRunningObjectTable(0, out var table) != 0 || table is null) return found;
         if (CreateBindCtx(0, out var context) != 0 || context is null) return found;
@@ -65,17 +74,21 @@ internal static class VisualStudioInstances
                 }
                 catch (COMException)
                 {
-                    // Busy, or shutting down as we asked. Skip it this time round.
+                    // Busy, or shutting down as we asked. Skip it this time round, and say
+                    // the list is short of it.
+                    complete = false;
                 }
                 catch (Exception)
                 {
                     // Anything else about one instance is not worth failing the others for.
+                    complete = false;
                 }
             }
         }
         catch (COMException)
         {
-            // No table to read: treat it as nothing open.
+            // The table could not be read through: what is open is not known.
+            complete = false;
         }
 
         return found;

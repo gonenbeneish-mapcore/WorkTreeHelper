@@ -23,6 +23,28 @@ public sealed class Worktree : INotifyPropertyChanged
         IsMain == other.IsMain && IsDetached == other.IsDetached && IsBare == other.IsBare &&
         IsLocked == other.IsLocked && IsPrunable == other.IsPrunable;
 
+    /// <summary>
+    /// Takes over what the row it replaces had found out, for a worktree git now reports
+    /// differently: a new commit, a pull, another branch checked out.
+    /// </summary>
+    /// <remarks>
+    /// The refresh that made this row goes on to work all of it out again. Until it does, the
+    /// row shows what the old one showed, rather than starting bare - no Visual Studio button,
+    /// no counts, no marks - and putting each back as it is found, which moved the window's
+    /// size about for a worktree that had only gained a commit. The pull request stays only
+    /// on the same branch: it belongs to the branch, not the folder.
+    /// </remarks>
+    public void TakeOverFrom(Worktree old)
+    {
+        HasVisualStudio = old.HasVisualStudio;
+        Status = old.Status;
+        IsOpenInVsCode = old.IsOpenInVsCode;
+        IsOpenInGitExtensions = old.IsOpenInGitExtensions;
+        IsSolutionOpen = old.IsSolutionOpen;
+        IsFolderOpen = old.IsFolderOpen;
+        if (Branch == old.Branch) PullRequest = old.PullRequest;
+    }
+
     /// <summary>Branch shown in the list: branch name, or "detached @ abc1234".</summary>
     public string DisplayBranch =>
         IsBare ? "(bare)" :
@@ -49,7 +71,7 @@ public sealed class Worktree : INotifyPropertyChanged
 
     /// <summary>
     /// Working-tree state, filled in after the list appears because it costs one git call
-    /// per worktree. Null until it arrives, and after a read that failed.
+    /// per worktree. Null until it first arrives; a later read that fails leaves it as it was.
     /// </summary>
     public WorktreeStatus? Status
     {
