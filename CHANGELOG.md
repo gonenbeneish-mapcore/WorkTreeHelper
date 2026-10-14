@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.8.0
+
+- An **Android Studio** button, on worktrees that have an Android project, where Android Studio
+  is installed. It opens that project, and once the project is open it carries the accent ring and
+  brings its window forward.
+- Options says where each worktree keeps its Android project, from the worktree's root:
+  `MapCore\Android\Test\McAndroidTester` unless changed. It has a box for the button too, to turn
+  it off.
+
 ## v1.7.0
 
 - Git Extensions already open on a worktree is brought back rather than opened again.
