@@ -131,8 +131,10 @@ public class SettingsDefaultsTests
         Assert.True(settings.ShowExplorerButton);
         Assert.True(settings.ShowGitExtensionsButton);
         Assert.True(settings.ShowVisualStudioButtons);
+        Assert.True(settings.ShowAndroidStudioButton);
         Assert.True(settings.ShowPullRequestButton);
         Assert.Null(settings.GitExtensionsPath);
+        Assert.Null(settings.AndroidStudioPath);
     }
 }
 

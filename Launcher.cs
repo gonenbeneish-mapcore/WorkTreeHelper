@@ -159,6 +159,74 @@ public static class Launcher
         return null;
     }
 
+    /// <summary>
+    /// Where a worktree keeps its Android project, relative to its root. A worktree without
+    /// this folder never shows the Android Studio button.
+    /// </summary>
+    public const string AndroidProject = @"MapCore\Android\Test\McAndroidTester";
+
+    /// <summary>The worktree's Android project folder.</summary>
+    public static string AndroidProjectIn(string worktree) => Path.Combine(worktree, AndroidProject);
+
+    /// <summary>True if <paramref name="worktree"/> holds the Android project.</summary>
+    public static bool HasAndroidProject(string worktree)
+    {
+        try
+        {
+            return Directory.Exists(AndroidProjectIn(worktree));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the worktree's Android project in Android Studio. One already running takes the
+    /// project into a window of its own rather than starting a second copy of itself.
+    /// </summary>
+    public static void OpenInAndroidStudio(string exe, string worktree)
+    {
+        var project = AndroidProjectIn(worktree);
+        Start(exe, Quote(project), project);
+    }
+
+    /// <summary>Where Android Studio is installed, or null where it is not.</summary>
+    /// <remarks>
+    /// Its installer records the folder under Software\Android Studio, which is asked first;
+    /// the usual folders catch a copy that was unzipped, or installed per user by the
+    /// JetBrains Toolbox.
+    /// </remarks>
+    public static string? FindAndroidStudio()
+    {
+        const string exeName = "studio64.exe";
+        var candidates = new List<string>();
+
+        foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
+        {
+            try
+            {
+                using var key = hive.OpenSubKey(@"Software\Android Studio");
+                if (key?.GetValue("Path") is string dir && dir.Length > 0)
+                    candidates.Add(Path.Combine(dir, "bin", exeName));
+            }
+            catch { /* unreadable key: look elsewhere */ }
+        }
+
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Android", "Android Studio", "bin", exeName));
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Android Studio", "bin", exeName));
+
+        foreach (var c in candidates)
+        {
+            try
+            {
+                if (File.Exists(c)) return c;
+            }
+            catch { /* malformed Path */ }
+        }
+        return null;
+    }
+
     /// <summary>Hands a URL to whatever the user browses with.</summary>
     public static void OpenInBrowser(string url)
         => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });

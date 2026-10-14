@@ -51,6 +51,8 @@ public sealed class Settings
     public bool ShowGitExtensionsButton { get; set; } = true;
     /// <summary>Only where Visual Studio is installed and the worktree carries the script.</summary>
     public bool ShowVisualStudioButtons { get; set; } = true;
+    /// <summary>Only where Android Studio is installed and the worktree has the Android project.</summary>
+    public bool ShowAndroidStudioButton { get; set; } = true;
     /// <summary>Only on branches with a pull request open, whatever this says.</summary>
     public bool ShowPullRequestButton { get; set; } = true;
 
@@ -61,6 +63,7 @@ public sealed class Settings
     public string? VsCodePath { get; set; }
     public string? GitExtensionsPath { get; set; }
     public string? VisualStudioPath { get; set; }
+    public string? AndroidStudioPath { get; set; }
 
     /// <summary>
     /// The version whose what's-new was last closed, so the next version knows what to tell.

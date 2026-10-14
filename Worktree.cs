@@ -42,6 +42,8 @@ public sealed class Worktree : INotifyPropertyChanged
         IsOpenInGitExtensions = old.IsOpenInGitExtensions;
         IsSolutionOpen = old.IsSolutionOpen;
         IsFolderOpen = old.IsFolderOpen;
+        HasAndroidStudio = old.HasAndroidStudio;
+        IsOpenInAndroidStudio = old.IsOpenInAndroidStudio;
         if (Branch == old.Branch) PullRequest = old.PullRequest;
     }
 
@@ -213,6 +215,40 @@ public sealed class Worktree : INotifyPropertyChanged
             if (_isOpenInGitExtensions == value) return;
             _isOpenInGitExtensions = value;
             Raise(nameof(IsOpenInGitExtensions));
+        }
+    }
+
+    private bool _hasAndroidStudio;
+
+    /// <summary>
+    /// This worktree has the Android project, so its row offers to open it in Android Studio.
+    /// Filled in per refresh, like <see cref="HasVisualStudio"/>.
+    /// </summary>
+    public bool HasAndroidStudio
+    {
+        get => _hasAndroidStudio;
+        set
+        {
+            if (_hasAndroidStudio == value) return;
+            _hasAndroidStudio = value;
+            Raise(nameof(HasAndroidStudio));
+        }
+    }
+
+    private bool _isOpenInAndroidStudio;
+
+    /// <summary>
+    /// An Android Studio window has this worktree's Android project open, so its button brings
+    /// that window back. A snapshot, like <see cref="IsOpenInVsCode"/>.
+    /// </summary>
+    public bool IsOpenInAndroidStudio
+    {
+        get => _isOpenInAndroidStudio;
+        set
+        {
+            if (_isOpenInAndroidStudio == value) return;
+            _isOpenInAndroidStudio = value;
+            Raise(nameof(IsOpenInAndroidStudio));
         }
     }
 

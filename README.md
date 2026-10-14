@@ -23,8 +23,8 @@ pick the folder, or drag it onto the window. Any folder inside the project will 
 the rest by itself. It remembers, so this is a first-run thing.
 
 **Open one.** The buttons at the right of each row, in order, each showing the icon of what it
-opens. An accent ring round VS Code, Git Extensions or Visual Studio means that one already has
-the worktree open, and clicking it brings that window forward rather than opening another.
+opens. An accent ring round VS Code, Git Extensions, Visual Studio or Android Studio means that
+one already has the worktree open, and clicking it brings that window forward rather than opening another.
 
 | Button | Opens |
 |---|---|
@@ -33,6 +33,7 @@ the worktree open, and clicking it brings that window forward rather than openin
 | Explorer | That folder in **File Explorer**. |
 | Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
 | Visual Studio | **Visual Studio** — only for projects set up for it, and where Visual Studio is installed, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
+| Android Studio | The worktree's Android project, `MapCore\Android\Test\McAndroidTester`, in **Android Studio** — only for worktrees that have it, and where Android Studio is installed; see [The Android Studio button](#the-android-studio-button). |
 | GitHub | The open **pull request** for that branch, in your browser. Only on branches that have one. |
 
 Any of them can be turned off in **Options**. **Right-click a row** for the same things, whether
@@ -65,7 +66,7 @@ The gear in the title bar opens them; every change applies as you make it.
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
 | **Visual Studio** | *Allow a second Visual Studio on the same worktree* (on by default): once the solution or the folder is open, the row offers the other one too. Off: it only offers to bring back the one that is open. |
-| **Buttons** | Which of the six buttons the rows carry, each shown with its icon; all of them by default. VS Code, Git Extensions and Visual Studio are unticked on a computer that does not have them, and ticking one then offers to **Locate** its `.exe` yourself, which is remembered. A button turned off is still on the row's right-click menu. |
+| **Buttons** | Which of the seven buttons the rows carry, each shown with its icon; all of them by default. VS Code, Git Extensions, Visual Studio and Android Studio are unticked on a computer that does not have them, and ticking one then offers to **Locate** its `.exe` yourself, which is remembered. A button turned off is still on the row's right-click menu. |
 | **Layout** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every pull request button lines up, with a gap in a row that has none. |
 
 ## Install
@@ -81,7 +82,7 @@ It needs:
 | **`git` on PATH** | Every listing is `git worktree list` / `git status` under the hood. |
 | Windows 10 or 11, x64 | Published `win-x64`. |
 
-VS Code, Git Extensions and Visual Studio are optional — a button whose program is missing does
+VS Code, Git Extensions, Visual Studio and Android Studio are optional — a button whose program is missing does
 not appear, and one installed somewhere unusual can be pointed at in Options. Without VS Code's
 button, double-clicking a row still tries `code` on PATH. The terminal button falls back to
 PowerShell without Windows Terminal. The exe is unsigned, so Windows shows a SmartScreen prompt
@@ -225,6 +226,30 @@ can leave the folder's name out entirely. The automation object instead names wh
 worktree and the mode. An instance running elevated while this app is not cannot be seen, since
 the two do not share a Running Object Table.
 
+## The Android Studio button
+
+A worktree that has the Android project at **`MapCore\Android\Test\McAndroidTester`** gets an
+Android Studio button, where Android Studio is installed or has been located in Options. It is
+found through the folder its installer records in the registry, or under `Program Files\Android`
+or `%LOCALAPPDATA%\Programs`. The button opens that project folder; an Android Studio already
+running takes it into a window of its own.
+
+Once the project is open the button carries the accent ring, and clicking it brings that window
+forward. Which worktree a window belongs to takes two sources, since every worktree's project has
+the same name and Android Studio offers nothing like Visual Studio's Running Object Table, nor a
+command line that names more than the first project it started with:
+
+- **The window's title**, `McAndroidTester – MainActivity.java`, which names the project but not
+  where it is — unless two projects of the same name are open at once, when Android Studio adds
+  each one's path: `McAndroidTester [D:\git\mapcore2\…\McAndroidTester] – …`.
+- **Android Studio's own list of recent projects**, `recentProjects.xml` in its settings folder
+  under `%APPDATA%\Google`, which marks each project it has open. A title without a path is
+  matched to the project of that name marked open there, and opened since Android Studio started,
+  because one that was killed rather than closed leaves its projects marked open.
+
+Android Studio writes that list when it gets round to it, usually as you switch away from it, so a
+project just opened may take a moment to be marked.
+
 ## The pull request button
 
 A worktree whose branch has an open pull request gets a button carrying GitHub's mark at the end
@@ -259,12 +284,13 @@ uses too). Where none of those answer, no buttons appear. A public repository ne
 | `TrayIcon.cs` | The notification-area icon, straight through `Shell_NotifyIcon` |
 | `PopupPlacement.cs` | Puts the tray menu on the cursor and gives it the foreground |
 | `LinkPaths.cs` | Rewrites git's paths back through the symbolic link you picked |
-| `Launcher.cs` | Finds and opens VS Code / terminal / Explorer / Git Extensions / the Visual Studio script |
+| `Launcher.cs` | Finds and opens VS Code / terminal / Explorer / Git Extensions / the Visual Studio script / Android Studio |
 | `ExternalTool.cs` | A program a button opens: where it is, and whether its button is up |
 | `AppIcons.cs` | The icons of the programs the buttons open, asked of the shell |
 | `TopLevelWindows.cs` | A program's windows by title, and bringing one forward |
 | `VsCodeWindows.cs` | Finds and focuses the VS Code window that has a worktree open |
 | `GitExtensionsWindows.cs` | The same for Git Extensions |
+| `AndroidStudioWindows.cs` | The same for Android Studio, from its titles and its list of open projects |
 | `OpenMark.cs` | Marks a button whose program already has the worktree open |
 | `Demo.cs` | The demo mode the README's pictures are taken in |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |

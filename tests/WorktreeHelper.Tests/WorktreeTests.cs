@@ -14,6 +14,8 @@ public class WorktreeTakeOverTests
         Status = new WorktreeStatus(3, 1, 0, "origin/" + branch),
         IsOpenInVsCode = true,
         IsOpenInGitExtensions = true,
+        HasAndroidStudio = true,
+        IsOpenInAndroidStudio = true,
         IsSolutionOpen = true,
         PullRequest = new PullRequest(7, "A change", "https://github.com/owner/repo/pull/7", false),
     };
@@ -32,6 +34,8 @@ public class WorktreeTakeOverTests
         Assert.Equal(old.Status, fresh.Status);
         Assert.True(fresh.IsOpenInVsCode);
         Assert.True(fresh.IsOpenInGitExtensions);
+        Assert.True(fresh.HasAndroidStudio);
+        Assert.True(fresh.IsOpenInAndroidStudio);
         Assert.True(fresh.IsSolutionOpen);
         Assert.Same(old.PullRequest, fresh.PullRequest);
     }

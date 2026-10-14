@@ -98,7 +98,7 @@
         <!-- Which buttons a row carries. The ones that come and go by row still only appear
              where they have something to open; this can only take them away.
 
-             The three that open a program show whether the button is up, not merely wanted,
+             The four that open a program show whether the button is up, not merely wanted,
              so one whose program is missing is unticked. Ticking it then asks for the program
              rather than ticking a box that would change nothing, which is why those three
              only show the value and act through Click, like the radio buttons below.
@@ -142,6 +142,13 @@
                     <TextBlock Text="Visual Studio" VerticalAlignment="Center"/>
                 </StackPanel>
             </CheckBox>
+            <CheckBox Margin="0,0,0,4" Tag="{Binding AndroidStudioTool}" AutomationProperties.Name="Android Studio"
+                      IsChecked="{Binding AndroidStudioTool.Shown, Mode=OneWay}" Click="Tool_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Image Style="{StaticResource AppIcon}" Margin="0,0,6,0" Source="{Binding AndroidStudioTool.Icon}"/>
+                    <TextBlock Text="Android Studio" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
             <CheckBox Margin="0,0,0,4" IsChecked="{Binding ShowPullRequestButton}" AutomationProperties.Name="Pull request">
                 <StackPanel Orientation="Horizontal">
                     <ContentControl Content="{StaticResource GitHubMark}" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -150,7 +157,7 @@
             </CheckBox>
         </UniformGrid>
         <TextBlock Style="{StaticResource Explains}" Margin="0,2,0,8"
-                   Text="Visual Studio and the pull request appear only on a row that has one to open. A program that is not installed leaves its box unticked; tick it to find the program yourself. A button turned off is still on the row's right-click menu."/>
+                   Text="Visual Studio, Android Studio and the pull request appear only on a row that has one to open. A program that is not installed leaves its box unticked; tick it to find the program yourself. A button turned off is still on the row's right-click menu."/>
 
         <TextBlock Style="{StaticResource Heading}" Text="Layout" Margin="0,6,0,6"/>
         <Grid>

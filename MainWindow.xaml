@@ -56,6 +56,8 @@
                       Tag="row.gitextensions"/>
             <MenuItem Header="Open in Visual Studio" Click="MenuOpenVisualStudio_Click"
                       Visibility="{Binding HasVisualStudio, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+            <MenuItem Header="Open in Android Studio" Click="MenuOpenAndroidStudio_Click"
+                      Tag="row.androidstudio"/>
             <MenuItem Header="Open pull request" Click="MenuOpenPullRequest_Click"
                       Visibility="{Binding HasPullRequest, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
             <Separator/>
@@ -302,6 +304,14 @@
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="ToolTip" Value="Open this worktree in Git Extensions"/>
+        </Style>
+        <!-- Android Studio, where it is installed and the worktree has the Android project.
+             Lettered only where its icon could not be had, like the others. -->
+        <Style x:Key="AndroidStudioButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="ToolTip" Value="Open this worktree's Android project in Android Studio"/>
         </Style>
         <!-- Visual Studio buttons. Lettering rather than a glyph: the icon font has nothing
              that reads as Visual Studio, and two initials are unmistakable.
@@ -783,6 +793,27 @@
                                                 </Grid>
                                                 <ContentControl Content="{StaticResource VsFolderIcon}"
                                                                 Visibility="{Binding VisualStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+                                    <!-- Only where Android Studio is installed and the worktree has the
+                                         Android project, so it comes and goes by row like Visual Studio. -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Visibility="{Binding AndroidStudioTool.Shown, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                        <Button Style="{StaticResource AndroidStudioButton}" Click="OpenAndroidStudio_Click" Tag="{Binding Path}"
+                                                local:OpenMark.IsOpen="{Binding IsOpenInAndroidStudio}"
+                                                AutomationProperties.Name="Open in Android Studio">
+                                            <Button.Visibility>
+                                                <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
+                                                    <Binding Path="HasAndroidStudio"/>
+                                                    <Binding Path="HoldAndroidStudioColumn" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                </MultiBinding>
+                                            </Button.Visibility>
+                                            <Grid>
+                                                <Image Style="{StaticResource AppIcon}"
+                                                       Source="{Binding AndroidStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                <TextBlock Text="AS" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding AndroidStudioTool.Icon, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:NullToVisibilityConverter.WhenNull}}"/>
                                             </Grid>
                                         </Button>
                                     </StackPanel>

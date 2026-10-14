@@ -384,14 +384,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Which buttons the rows carry. Each is a switch on a whole column: a button turned off
     // is collapsed in every row, whatever the row would otherwise show.
     //
-    // The three that hand the worktree to a program are also off wherever that program is
+    // The four that hand the worktree to a program are also off wherever that program is
     // not installed, which is what ExternalTool keeps track of.
 
     public ExternalTool VsCodeTool { get; } = new("VS Code", "Code.exe", Launcher.FindVsCode);
     public ExternalTool GitExtensionsTool { get; } = new("Git Extensions", "GitExtensions.exe", Launcher.FindGitExtensions);
     public ExternalTool VisualStudioTool { get; } = new("Visual Studio", "devenv.exe", Launcher.FindVisualStudio);
+    public ExternalTool AndroidStudioTool { get; } = new("Android Studio", "studio64.exe", Launcher.FindAndroidStudio);
 
-    private ExternalTool[] Tools => [VsCodeTool, GitExtensionsTool, VisualStudioTool];
+    private ExternalTool[] Tools => [VsCodeTool, GitExtensionsTool, VisualStudioTool, AndroidStudioTool];
 
     /// <summary>
     /// Fills a tool in from the settings, and writes it back to them whenever it changes.
@@ -470,7 +471,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // In columns, a button a row lacks keeps its place when some other row has one. These say
     // which places are kept; the row template reads them through SlotVisibility.
 
-    private bool _holdVsColumn, _holdVsFolderColumn, _holdPrColumn;
+    private bool _holdVsColumn, _holdVsFolderColumn, _holdAndroidStudioColumn, _holdPrColumn;
 
     public bool HoldVsColumn
     {
@@ -484,6 +485,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => Set(ref _holdVsFolderColumn, value);
     }
 
+    public bool HoldAndroidStudioColumn
+    {
+        get => _holdAndroidStudioColumn;
+        private set => Set(ref _holdAndroidStudioColumn, value);
+    }
+
     public bool HoldPrColumn
     {
         get => _holdPrColumn;
@@ -494,15 +501,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void UpdateHeldColumns()
     {
         var align = AlignColumns;
-        var was = (HoldVsColumn, HoldVsFolderColumn, HoldPrColumn);
+        var was = (HoldVsColumn, HoldVsFolderColumn, HoldAndroidStudioColumn, HoldPrColumn);
         HoldVsColumn = align && Worktrees.Any(w => w.ShowVisualStudioChooser || w.ShowSolutionButton);
         HoldVsFolderColumn = align && Worktrees.Any(w => w.ShowFolderButton);
+        HoldAndroidStudioColumn = align && Worktrees.Any(w => w.HasAndroidStudio);
         HoldPrColumn = align && Worktrees.Any(w => w.HasPullRequest);
 
         // A column opening or closing makes every row a button wider or narrower. Left to the
         // next refresh, a column that opened after the window was sized - the PR one, on the
         // first refresh after startup - pushed each row's last button past the window's edge.
-        if (IsLoaded && was != (HoldVsColumn, HoldVsFolderColumn, HoldPrColumn)) AutoSize();
+        if (IsLoaded && was != (HoldVsColumn, HoldVsFolderColumn, HoldAndroidStudioColumn, HoldPrColumn)) AutoSize();
     }
 
     /// <summary>
@@ -519,7 +527,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Worktree.ShowVisualStudioChooser) or nameof(Worktree.ShowSolutionButton)
-            or nameof(Worktree.ShowFolderButton) or nameof(Worktree.HasPullRequest))
+            or nameof(Worktree.ShowFolderButton) or nameof(Worktree.HasAndroidStudio) or nameof(Worktree.HasPullRequest))
         {
             UpdateHeldColumns();
             if (IsLoaded) AutoSize();
@@ -596,6 +604,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             t => (_settings.ShowGitExtensionsButton, _settings.GitExtensionsPath) = (t.Wanted, t.Chosen));
         TrackTool(VisualStudioTool, _settings.ShowVisualStudioButtons, _settings.VisualStudioPath,
             t => (_settings.ShowVisualStudioButtons, _settings.VisualStudioPath) = (t.Wanted, t.Chosen));
+        TrackTool(AndroidStudioTool, _settings.ShowAndroidStudioButton, _settings.AndroidStudioPath,
+            t => (_settings.ShowAndroidStudioButton, _settings.AndroidStudioPath) = (t.Wanted, t.Chosen));
         // Started now rather than left to the first refresh, which there is none of without a
         // repository, and Options opens first then. It is awaited again by each refresh.
         _ = LocateToolsAsync();
@@ -1369,7 +1379,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _updatingOpenState;
     private bool _openStateStale;
 
-    /// <summary>Flags the worktrees that already have a VS Code, Git Extensions or Visual Studio window.</summary>
+    /// <summary>
+    /// Flags the worktrees that already have a VS Code, Git Extensions, Visual Studio or
+    /// Android Studio window.
+    /// </summary>
     /// <remarks>
     /// A request arriving mid-run is remembered and served by another pass rather than
     /// dropped: activating the window during a refresh used to leave the flags stale until
@@ -1400,12 +1413,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     var codeNames = VsCodeWindows.OpenFolderNames();
                     var gitExtensionsNames = GitExtensionsWindows.OpenFolderNames();
                     var studio = VisualStudioInstances.Open(out var studioComplete);
+                    var android = AndroidStudioWindows.OpenProjects();
                     return (studioComplete, targets
                         .Select(w => (
                             Code: codeNames.Contains(w.Name),
                             GitExtensions: gitExtensionsNames.Contains(w.Name),
                             Solution: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Solution),
-                            Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder)))
+                            Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder),
+                            Android: w.HasAndroidStudio && android.Any(p => LinkPaths.SameFolder(p.Folder, Launcher.AndroidProjectIn(w.Path)))))
                         .ToArray());
                 });
                 var (studioAnswered, found) = flags;
@@ -1414,6 +1429,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     targets[i].IsOpenInVsCode = found[i].Code;
                     targets[i].IsOpenInGitExtensions = found[i].GitExtensions;
+                    targets[i].IsOpenInAndroidStudio = found[i].Android;
                     if (Demo.IsOn) Demo.MarkOpen(targets[i]);
                     // A Visual Studio too busy to answer - mid-build, say - is not one that has
                     // closed. Taken as closed, the row's two Visual Studio buttons fell back to
@@ -1454,18 +1470,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Flags the worktrees that carry the Visual Studio script, and looks again for the
-    /// programs the buttons open, which may have been installed or removed while the app sat
-    /// in the tray. Runs before the window is sized, since these buttons take width of their own.
+    /// Flags the worktrees that carry the Visual Studio script or the Android project, and
+    /// looks again for the programs the buttons open, which may have been installed or removed
+    /// while the app sat in the tray. Runs before the window is sized, since these buttons take
+    /// width of their own.
     /// </summary>
     private async Task UpdateLaunchersAsync()
     {
         var tools = LocateToolsAsync();
         var targets = Worktrees.ToList();
 
-        var found = await Task.Run(() => targets.Select(w => Launcher.HasVisualStudioScript(w.Path)).ToArray());
+        var found = await Task.Run(() => targets
+            .Select(w => (VisualStudio: Launcher.HasVisualStudioScript(w.Path), Android: Launcher.HasAndroidProject(w.Path)))
+            .ToArray());
         for (var i = 0; i < targets.Count; i++)
-            targets[i].HasVisualStudio = found[i];
+        {
+            targets[i].HasVisualStudio = found[i].VisualStudio;
+            targets[i].HasAndroidStudio = found[i].Android;
+        }
         await tools;
     }
 
@@ -1940,18 +1962,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void MenuOpenExplorer_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Run(Launcher.OpenInExplorer, wt.Path, "Explorer"));
     private void MenuOpenGitExtensions_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenGitExtensions(wt.Path));
 
+    private void MenuOpenAndroidStudio_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => OpenAndroidStudio(wt.Path));
+
     private const string RowGitExtensionsTag = "row.gitextensions";
+    private const string RowAndroidStudioTag = "row.androidstudio";
 
     /// <summary>
-    /// Offers Git Extensions only where it is installed. Done here because the menu is a
-    /// popup of its own and cannot bind to the window, and it is one menu for every row.
+    /// Offers Git Extensions and Android Studio only where they are installed. Done here
+    /// because the menu is a popup of its own and cannot bind to the window, and it is one
+    /// menu for every row.
     /// </summary>
     private void RowMenu_Opened(object sender, RoutedEventArgs e)
     {
         if (sender is not ContextMenu menu) return;
+        var row = menu.DataContext as Worktree;
         foreach (var item in menu.Items.OfType<MenuItem>())
+        {
             if (Equals(item.Tag, RowGitExtensionsTag))
                 item.Visibility = GitExtensionsTool.Found ? Visibility.Visible : Visibility.Collapsed;
+            else if (Equals(item.Tag, RowAndroidStudioTag))
+                item.Visibility = AndroidStudioTool.Found && row is { HasAndroidStudio: true } ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
     private void MenuCopyPath_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Path, "path"));
     private void MenuCopyBranch_Click(object sender, RoutedEventArgs e) => WithWorktree(sender, wt => Copy(wt.Branch.Length > 0 ? wt.Branch : wt.ShortHead, "branch"));
@@ -2210,6 +2241,45 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// <summary>Git Extensions puts its window up in a few seconds, and names the worktree in it once loaded.</summary>
     private Task WatchForGitExtensionsWindowAsync(string folder)
         => WatchForWindowAsync(folder, w => w.IsOpenInGitExtensions, attempts: 15, TimeSpan.FromSeconds(1));
+
+    private void OpenAndroidStudio_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.Tag is string folder) OpenAndroidStudio(folder);
+    }
+
+    /// <summary>
+    /// Brings back the Android Studio window that has this worktree's Android project open, or
+    /// opens the project, the way the Git Extensions button does.
+    /// </summary>
+    private void OpenAndroidStudio(string folder)
+    {
+        var project = Launcher.AndroidProjectIn(folder);
+        try
+        {
+            if (AndroidStudioWindows.TryFocus(project))
+            {
+                Report($"Focused Android Studio: {project}");
+                return;
+            }
+            // Removed since the last look, which is only found out by trying.
+            var exe = AndroidStudioTool.Path ?? throw new FileNotFoundException("Android Studio is not installed.");
+            Launcher.OpenInAndroidStudio(exe, folder);
+            Report($"Opening in Android Studio: {project}");
+            _ = WatchForAndroidStudioWindowAsync(folder);
+        }
+        catch (Exception ex)
+        {
+            Fail($"Could not open Android Studio: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Android Studio takes a while to start, and a while longer to say which project a window
+    /// has: the title names only the project, and its list of what is open is written when it
+    /// gets round to it.
+    /// </summary>
+    private Task WatchForAndroidStudioWindowAsync(string folder)
+        => WatchForWindowAsync(folder, w => w.IsOpenInAndroidStudio, attempts: 40, TimeSpan.FromSeconds(3));
 
     private void RunAction(object sender, Action<string> action, string what)
     {
