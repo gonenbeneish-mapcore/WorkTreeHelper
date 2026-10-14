@@ -108,6 +108,27 @@ public sealed class LinkPaths
         }
     }
 
+    /// <summary>
+    /// Where <paramref name="path"/> is from inside <paramref name="folder"/>, with links on
+    /// both sides resolved first: empty for the folder itself, null for a path outside it.
+    /// </summary>
+    public static string? RelativeTo(string path, string folder)
+    {
+        try
+        {
+            var inner = ResolveFinal(path).TrimEnd(Separators);
+            var outer = ResolveFinal(folder).TrimEnd(Separators);
+
+            if (Same(inner, outer)) return "";
+            if (inner.Length > outer.Length
+                && inner.AsSpan(0, outer.Length).Equals(outer, StringComparison.OrdinalIgnoreCase)
+                && Separators.Contains(inner[outer.Length]))
+                return inner[(outer.Length + 1)..];
+        }
+        catch { /* not a path */ }
+        return null;
+    }
+
     /// <summary>Follows every link along <paramref name="path"/>, not just its last segment.</summary>
     private static string ResolveFinal(string path)
     {

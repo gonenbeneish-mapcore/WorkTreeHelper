@@ -89,11 +89,34 @@
             </StackPanel>
         </Grid>
 
-        <TextBlock Style="{StaticResource Heading}" Text="Visual Studio" Margin="0,10,0,6"/>
-        <CheckBox Content="Allow a second Visual Studio on the same worktree"
-                  IsChecked="{Binding AllowSecondVisualStudio}"/>
-        <TextBlock Style="{StaticResource Explains}"
-                   Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
+        <!-- The two IDEs side by side, like the pairs of choices, to keep the window short.
+
+             The Android project's folder applies once typing pauses, rather than at each
+             keystroke, which would put the buttons up and take them down again under the typing.
+             Not bound: the folder comes back tidied, and put into the box mid-word that would move
+             the caret. The code behind fills it, applies it and tidies it once it is left. -->
+        <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource Heading}" Text="Visual Studio"/>
+                <CheckBox Content="Allow a second Visual Studio on the same worktree"
+                          IsChecked="{Binding AllowSecondVisualStudio}"/>
+                <TextBlock Style="{StaticResource Explains}"
+                           Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Style="{StaticResource Heading}" Text="Android Studio"/>
+                <TextBox x:Name="AndroidProjectBox" FontSize="12" VerticalContentAlignment="Center"
+                         TextChanged="AndroidProjectBox_TextChanged" LostFocus="AndroidProjectBox_LostFocus"
+                         AutomationProperties.Name="Android project folder"/>
+                <TextBlock Style="{StaticResource Explains}" Margin="0,6,0,8"
+                           Text="The Android project's folder in each worktree, from the worktree's root. A row shows the Android Studio button where that folder has a Gradle project."/>
+            </StackPanel>
+        </Grid>
 
         <!-- Which buttons a row carries. The ones that come and go by row still only appear
              where they have something to open; this can only take them away.

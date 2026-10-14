@@ -418,6 +418,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
     }
 
+    /// <summary>
+    /// Where each worktree keeps its Android project, relative to the worktree's root, as
+    /// Options shows it. A change looks again at which rows have one, and which are open.
+    /// </summary>
+    public string AndroidProjectPath
+    {
+        get => _settings.AndroidProjectPath ?? Launcher.DefaultAndroidProject;
+        set
+        {
+            var path = Launcher.RelativeAndroidProject(value, Worktrees.Select(w => w.Path));
+            if (path == AndroidProjectPath)
+            {
+                // Typed differently but the same once tidied: the box shows it tidied.
+                OnPropertyChanged(nameof(AndroidProjectPath));
+                return;
+            }
+            _settings.AndroidProjectPath = path;
+            _settings.Save();
+            OnPropertyChanged(nameof(AndroidProjectPath));
+            _ = RecheckAndroidProjectsAsync();
+        }
+    }
+
+    private async Task RecheckAndroidProjectsAsync()
+    {
+        await UpdateLaunchersAsync();
+        await UpdateOpenStateAsync();
+    }
+
     /// <summary>The terminal button's icon; null keeps its prompt.</summary>
     public ImageSource? TerminalIcon { get; } = AppIcons.OfTerminal();
 
@@ -1408,6 +1437,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 // too slow to sit on the UI thread — and a busy Visual Studio can take its
                 // time answering.
                 var targets = Worktrees.ToList();
+                var androidProject = AndroidProjectPath;
                 var flags = await Task.Run(() =>
                 {
                     var codeNames = VsCodeWindows.OpenFolderNames();
@@ -1420,7 +1450,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             GitExtensions: gitExtensionsNames.Contains(w.Name),
                             Solution: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Solution),
                             Folder: studio.Any(i => i.Holds(w.Path) && i.Mode == VisualStudioMode.Folder),
-                            Android: w.HasAndroidStudio && android.Any(p => LinkPaths.SameFolder(p.Folder, Launcher.AndroidProjectIn(w.Path)))))
+                            Android: w.HasAndroidStudio && android.Any(p => LinkPaths.SameFolder(p.Folder, Launcher.AndroidProjectIn(w.Path, androidProject)))))
                         .ToArray());
                 });
                 var (studioAnswered, found) = flags;
@@ -1479,14 +1509,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var tools = LocateToolsAsync();
         var targets = Worktrees.ToList();
+        var androidProject = AndroidProjectPath;
 
         var found = await Task.Run(() => targets
-            .Select(w => (VisualStudio: Launcher.HasVisualStudioScript(w.Path), Android: Launcher.HasAndroidProject(w.Path)))
+            .Select(w => (VisualStudio: Launcher.HasVisualStudioScript(w.Path), Android: Launcher.HasAndroidProject(w.Path, androidProject)))
             .ToArray());
+        // The folder may have changed while this looked, being typed in Options: then a later
+        // look is on its way, and this one's answer is for a folder no longer asked about.
+        var androidCurrent = androidProject == AndroidProjectPath;
         for (var i = 0; i < targets.Count; i++)
         {
             targets[i].HasVisualStudio = found[i].VisualStudio;
-            targets[i].HasAndroidStudio = found[i].Android;
+            if (androidCurrent) targets[i].HasAndroidStudio = found[i].Android;
         }
         await tools;
     }
@@ -2253,7 +2287,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     private void OpenAndroidStudio(string folder)
     {
-        var project = Launcher.AndroidProjectIn(folder);
+        var project = Launcher.AndroidProjectIn(folder, AndroidProjectPath);
         try
         {
             if (AndroidStudioWindows.TryFocus(project))
@@ -2263,7 +2297,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             // Removed since the last look, which is only found out by trying.
             var exe = AndroidStudioTool.Path ?? throw new FileNotFoundException("Android Studio is not installed.");
-            Launcher.OpenInAndroidStudio(exe, folder);
+            Launcher.OpenInAndroidStudio(exe, project);
             Report($"Opening in Android Studio: {project}");
             _ = WatchForAndroidStudioWindowAsync(folder);
         }

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace WorktreeHelper;
@@ -22,6 +23,35 @@ public partial class OptionsWindow : Window
         Owner = owner;
         DataContext = owner;
         Icon = owner.Icon;
+
+        AndroidProjectBox.Text = owner.AndroidProjectPath;
+        // Filling the box is not typing in it.
+        _androidProjectPause.Stop();
+        _androidProjectPause.Tick += (_, _) => ApplyAndroidProject();
+    }
+
+    /// <summary>How long typing must stop for before the folder is looked for.</summary>
+    private readonly DispatcherTimer _androidProjectPause = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+    private void AndroidProjectBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _androidProjectPause.Stop();
+        _androidProjectPause.Start();
+    }
+
+    /// <summary>The folder as typed goes to the main window, which looks for it in every worktree.</summary>
+    private void ApplyAndroidProject()
+    {
+        _androidProjectPause.Stop();
+        _owner.AndroidProjectPath = AndroidProjectBox.Text;
+    }
+
+    /// <summary>Done typing: applied, and shown the way it is kept.</summary>
+    private void AndroidProjectBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        ApplyAndroidProject();
+        if (AndroidProjectBox.Text != _owner.AndroidProjectPath) AndroidProjectBox.Text = _owner.AndroidProjectPath;
+        _androidProjectPause.Stop();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -33,6 +63,13 @@ public partial class OptionsWindow : Window
 
     /// <summary>The window has closed, and cannot own a dialog any more.</summary>
     private bool _closed;
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Closed before typing paused long enough for it to apply.
+        if (_androidProjectPause.IsEnabled) ApplyAndroidProject();
+        base.OnClosing(e);
+    }
 
     protected override void OnClosed(EventArgs e)
     {

@@ -53,6 +53,12 @@ public sealed class Settings
     public bool ShowVisualStudioButtons { get; set; } = true;
     /// <summary>Only where Android Studio is installed and the worktree has the Android project.</summary>
     public bool ShowAndroidStudioButton { get; set; } = true;
+
+    /// <summary>
+    /// Where each worktree keeps the Android project the Android Studio button opens, relative
+    /// to the worktree's root. Empty for the root itself.
+    /// </summary>
+    public string AndroidProjectPath { get; set; } = Launcher.DefaultAndroidProject;
     /// <summary>Only on branches with a pull request open, whatever this says.</summary>
     public bool ShowPullRequestButton { get; set; } = true;
 

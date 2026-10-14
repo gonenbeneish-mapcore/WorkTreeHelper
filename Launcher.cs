@@ -160,20 +160,31 @@ public static class Launcher
     }
 
     /// <summary>
-    /// Where a worktree keeps its Android project, relative to its root. A worktree without
-    /// this folder never shows the Android Studio button.
+    /// Where a worktree keeps its Android project, relative to its root, until Options says
+    /// otherwise.
     /// </summary>
-    public const string AndroidProject = @"MapCore\Android\Test\McAndroidTester";
+    public const string DefaultAndroidProject = @"MapCore\Android\Test\McAndroidTester";
 
-    /// <summary>The worktree's Android project folder.</summary>
-    public static string AndroidProjectIn(string worktree) => Path.Combine(worktree, AndroidProject);
+    /// <summary>
+    /// The worktree's Android project folder: <paramref name="project"/>, which is relative to
+    /// the worktree's root, under it.
+    /// </summary>
+    public static string AndroidProjectIn(string worktree, string project) => Path.Combine(worktree, project);
 
-    /// <summary>True if <paramref name="worktree"/> holds the Android project.</summary>
-    public static bool HasAndroidProject(string worktree)
+    /// <summary>
+    /// True if <paramref name="worktree"/> holds an Android project at <paramref name="project"/>:
+    /// a folder with a Gradle build in it, which is what Android Studio opens. A folder that
+    /// merely exists does not count, or an empty path, which is the worktree itself, would put
+    /// the button on every row.
+    /// </summary>
+    public static bool HasAndroidProject(string worktree, string project)
     {
         try
         {
-            return Directory.Exists(AndroidProjectIn(worktree));
+            // A path of its own rather than one under the worktree: every row would open it.
+            if (Path.IsPathRooted(project)) return false;
+            var folder = AndroidProjectIn(worktree, project);
+            return GradleFiles.Any(file => File.Exists(Path.Combine(folder, file)));
         }
         catch
         {
@@ -181,15 +192,39 @@ public static class Launcher
         }
     }
 
+    private static readonly string[] GradleFiles = ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"];
+
     /// <summary>
-    /// Opens the worktree's Android project in Android Studio. One already running takes the
+    /// The Android project folder as Options keeps it: relative to a worktree's root, with
+    /// backslashes and no slash at either end. A full path inside one of
+    /// <paramref name="worktrees"/>, such as one pasted from Explorer, is made relative to it.
+    /// </summary>
+    public static string RelativeAndroidProject(string? typed, IEnumerable<string> worktrees)
+    {
+        var path = (typed ?? "").Trim().Trim('"').Trim().Replace('/', '\\');
+        if (Path.IsPathFullyQualified(path))
+        {
+            // Through links, so a path pasted from D:\git\repo2 is found in a worktree the list
+            // has as C:\git\repo2, a link to it.
+            foreach (var worktree in worktrees)
+            {
+                if (LinkPaths.RelativeTo(path, worktree) is { } relative)
+                {
+                    path = relative;
+                    break;
+                }
+            }
+            if (Path.IsPathFullyQualified(path)) return path;
+        }
+        return path.Trim('\\');
+    }
+
+    /// <summary>
+    /// Opens a worktree's Android project in Android Studio. One already running takes the
     /// project into a window of its own rather than starting a second copy of itself.
     /// </summary>
-    public static void OpenInAndroidStudio(string exe, string worktree)
-    {
-        var project = AndroidProjectIn(worktree);
-        Start(exe, Quote(project), project);
-    }
+    public static void OpenInAndroidStudio(string exe, string project)
+        => Start(exe, Quote(project), project);
 
     /// <summary>Where Android Studio is installed, or null where it is not.</summary>
     /// <remarks>

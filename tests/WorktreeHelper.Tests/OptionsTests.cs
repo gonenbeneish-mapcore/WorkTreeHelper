@@ -135,6 +135,74 @@ public class SettingsDefaultsTests
         Assert.True(settings.ShowPullRequestButton);
         Assert.Null(settings.GitExtensionsPath);
         Assert.Null(settings.AndroidStudioPath);
+        Assert.Equal(Launcher.DefaultAndroidProject, settings.AndroidProjectPath);
+    }
+}
+
+public class SettingsUpgradeTests
+{
+    // Every key 1.7.0 saved, with the choices someone might have made in it.
+    private const string From170 = """
+        {
+          "LastRepoPath": "C:\\git\\mapcore",
+          "Pinned": true,
+          "ShowInTaskbar": true,
+          "AskedAboutTaskbar": true,
+          "AllowSecondVisualStudio": false,
+          "AlignColumns": true,
+          "ShowCodeButton": true,
+          "ShowTerminalButton": false,
+          "ShowExplorerButton": false,
+          "ShowGitExtensionsButton": true,
+          "ShowVisualStudioButtons": true,
+          "ShowPullRequestButton": false,
+          "VsCodePath": null,
+          "GitExtensionsPath": "D:\\Tools\\GitExtensions\\GitExtensions.exe",
+          "VisualStudioPath": null,
+          "LastSeenVersion": "1.7.0",
+          "WindowLeft": 1200,
+          "WindowTop": 300
+        }
+        """;
+
+    private static void AssertKeptFrom170(Settings settings)
+    {
+        Assert.Equal(@"C:\git\mapcore", settings.LastRepoPath);
+        Assert.True(settings.Pinned);
+        Assert.True(settings.ShowInTaskbar);
+        Assert.False(settings.AllowSecondVisualStudio);
+        Assert.True(settings.AlignColumns);
+        Assert.False(settings.ShowTerminalButton);
+        Assert.False(settings.ShowExplorerButton);
+        Assert.False(settings.ShowPullRequestButton);
+        Assert.Equal(@"D:\Tools\GitExtensions\GitExtensions.exe", settings.GitExtensionsPath);
+        Assert.Equal(1200, settings.WindowLeft);
+        Assert.Equal(300, settings.WindowTop);
+    }
+
+    [Fact]
+    public void An_update_keeps_every_choice_and_starts_the_new_ones_at_their_defaults()
+    {
+        var settings = JsonSerializer.Deserialize<Settings>(From170)!;
+
+        AssertKeptFrom170(settings);
+        Assert.True(settings.ShowAndroidStudioButton);
+        Assert.Equal(Launcher.DefaultAndroidProject, settings.AndroidProjectPath);
+        Assert.Null(settings.AndroidStudioPath);
+    }
+
+    [Fact]
+    public void The_first_save_after_an_update_keeps_the_old_choices_beside_the_new_ones()
+    {
+        var settings = JsonSerializer.Deserialize<Settings>(From170)!;
+        settings.ShowAndroidStudioButton = false;
+        settings.AndroidProjectPath = @"Android\App";
+
+        var saved = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
+
+        AssertKeptFrom170(saved);
+        Assert.False(saved.ShowAndroidStudioButton);
+        Assert.Equal(@"Android\App", saved.AndroidProjectPath);
     }
 }
 

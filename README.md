@@ -33,7 +33,7 @@ one already has the worktree open, and clicking it brings that window forward ra
 | Explorer | That folder in **File Explorer**. |
 | Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
 | Visual Studio | **Visual Studio** — only for projects set up for it, and where Visual Studio is installed, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
-| Android Studio | The worktree's Android project, `MapCore\Android\Test\McAndroidTester`, in **Android Studio** — only for worktrees that have it, and where Android Studio is installed; see [The Android Studio button](#the-android-studio-button). |
+| Android Studio | The worktree's Android project in **Android Studio**, `MapCore\Android\Test\McAndroidTester` unless Options says otherwise — only for worktrees that have it, and where Android Studio is installed; see [The Android Studio button](#the-android-studio-button). |
 | GitHub | The open **pull request** for that branch, in your browser. Only on branches that have one. |
 
 Any of them can be turned off in **Options**. **Right-click a row** for the same things, whether
@@ -66,6 +66,7 @@ The gear in the title bar opens them; every change applies as you make it.
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
 | **Visual Studio** | *Allow a second Visual Studio on the same worktree* (on by default): once the solution or the folder is open, the row offers the other one too. Off: it only offers to bring back the one that is open. |
+| **Android Studio** | The Android project's folder in each worktree, from the worktree's root: `MapCore\Android\Test\McAndroidTester` by default. A full path pasted from one worktree is made relative to it. It applies as you type, once you pause, and the rows gain or lose the button to match. |
 | **Buttons** | Which of the seven buttons the rows carry, each shown with its icon; all of them by default. VS Code, Git Extensions, Visual Studio and Android Studio are unticked on a computer that does not have them, and ticking one then offers to **Locate** its `.exe` yourself, which is remembered. A button turned off is still on the row's right-click menu. |
 | **Layout** | **Packed** (the default): each row’s buttons sit together, so the window is as small as it can be. **In columns**: each kind of button keeps its own column down the list, so every pull request button lines up, with a gap in a row that has none. |
 
@@ -228,11 +229,14 @@ the two do not share a Running Object Table.
 
 ## The Android Studio button
 
-A worktree that has the Android project at **`MapCore\Android\Test\McAndroidTester`** gets an
-Android Studio button, where Android Studio is installed or has been located in Options. It is
-found through the folder its installer records in the registry, or under `Program Files\Android`
-or `%LOCALAPPDATA%\Programs`. The button opens that project folder; an Android Studio already
-running takes it into a window of its own.
+A worktree that has an Android project where Options says — **`MapCore\Android\Test\McAndroidTester`**
+from the worktree's root, unless changed — gets an Android Studio button, where Android Studio is
+installed or has been located in Options. A project is a folder with a Gradle build in it,
+`settings.gradle` or `build.gradle` (or their `.kts` forms), so an empty folder setting, which is
+the worktree's root, puts the button only on worktrees that are Android projects themselves.
+Android Studio is found through the folder its installer records in the registry, or under
+`Program Files\Android` or `%LOCALAPPDATA%\Programs`. The button opens that project folder; an
+Android Studio already running takes it into a window of its own.
 
 Once the project is open the button carries the accent ring, and clicking it brings that window
 forward. Which worktree a window belongs to takes two sources, since every worktree's project has

@@ -75,6 +75,21 @@ public class LinkPathsTests
     }
 
     [Fact]
+    public void A_path_under_the_target_is_found_inside_the_link()
+    {
+        // A worktree listed as C:\git\repo2, and an Android project pasted from Explorer as
+        // D:\git\repo2\MapCore\Android: the same folder, under the other name.
+        using var tree = LinkedTree.Create();
+        if (tree is null) return;
+
+        var pasted = Path.Combine(tree.Target, @"MapCore\Android");
+        Assert.Equal(@"MapCore\Android", LinkPaths.RelativeTo(pasted, tree.Link));
+        Assert.Equal(@"MapCore\Android", Launcher.RelativeAndroidProject(pasted, [tree.Link]));
+        Assert.Equal("", LinkPaths.RelativeTo(tree.Target, tree.Link));
+        Assert.Null(LinkPaths.RelativeTo(Path.GetTempPath(), tree.Link));
+    }
+
+    [Fact]
     public void A_folder_contains_itself()
         => Assert.True(LinkPaths.IsUnder(Path.GetTempPath(), Path.GetTempPath()));
 
