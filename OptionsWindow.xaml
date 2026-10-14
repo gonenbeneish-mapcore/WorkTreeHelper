@@ -103,8 +103,11 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Style="{StaticResource Heading}" Text="Visual Studio"/>
-                <CheckBox Content="Allow a second Visual Studio on the same worktree"
-                          IsChecked="{Binding AllowSecondVisualStudio}"/>
+                <!-- Wrapped, since half the window's width does not hold it on one line. -->
+                <CheckBox IsChecked="{Binding AllowSecondVisualStudio}"
+                          AutomationProperties.Name="Allow a second Visual Studio on the same worktree">
+                    <TextBlock Text="Allow a second Visual Studio on the same worktree" TextWrapping="Wrap"/>
+                </CheckBox>
                 <TextBlock Style="{StaticResource Explains}"
                            Text="Once the solution or the folder is open, the row offers the other one too. Off, it only offers to bring back the one that is open."/>
             </StackPanel>
