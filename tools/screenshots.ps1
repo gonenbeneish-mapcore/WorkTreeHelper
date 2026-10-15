@@ -52,6 +52,7 @@ public static class ScreenshotWindows {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
     public struct Rect { public int Left, Top, Right, Bottom; }
 
     /// The visible window of the process whose title starts so.
@@ -76,6 +77,26 @@ function Get-Bounds([IntPtr]$Window) {
     return $r
 }
 
+# The corners Windows 11 gives a window, which it cuts only as it puts the window on screen:
+# what the window draws of itself is square, so the picture has to be cut to match. 8 is
+# DWMWCP_ROUND's radius at 100%; the space beyond it is left transparent.
+function Round-Corners([System.Drawing.Bitmap]$Bitmap, [double]$Radius) {
+    $rounded = New-Object System.Drawing.Bitmap($Bitmap.Width, $Bitmap.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($rounded)
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $d = [float](2 * $Radius); $w = [float]$Bitmap.Width; $h = [float]$Bitmap.Height
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc(0, 0, $d, $d, 180, 90)
+    $path.AddArc($w - $d, 0, $d, $d, 270, 90)
+    $path.AddArc($w - $d, $h - $d, $d, $d, 0, 90)
+    $path.AddArc(0, $h - $d, $d, $d, 90, 90)
+    $path.CloseFigure()
+    $brush = New-Object System.Drawing.TextureBrush($Bitmap)
+    $graphics.FillPath($brush, $path)
+    $brush.Dispose(); $path.Dispose(); $graphics.Dispose()
+    return $rounded
+}
+
 # Drawn by the window itself, so it comes out whole whatever is over it on screen.
 function Save-Window([IntPtr]$Window, [string]$Path) {
     $r = Get-Bounds $Window
@@ -84,9 +105,11 @@ function Save-Window([IntPtr]$Window, [string]$Path) {
     $dc = $graphics.GetHdc()
     [ScreenshotWindows]::PrintWindow($Window, $dc, 2) | Out-Null # PW_RENDERFULLCONTENT
     $graphics.ReleaseHdc($dc); $graphics.Dispose()
-    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
-    "  $([IO.Path]::GetFileName($Path)): $($bitmap.Width) x $($bitmap.Height)"
+    $rounded = Round-Corners $bitmap (8 * [ScreenshotWindows]::GetDpiForWindow($Window) / 96)
     $bitmap.Dispose()
+    $rounded.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    "  $([IO.Path]::GetFileName($Path)): $($rounded.Width) x $($rounded.Height)"
+    $rounded.Dispose()
 }
 
 function Wait-For([scriptblock]$Condition, [string]$What, [int]$Seconds = 30) {
