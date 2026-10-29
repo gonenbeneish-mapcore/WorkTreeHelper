@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.9.0
+
+- The **GitHub** button says how its pull request stands, with a badge on its corner: a hollow
+  green tick when approved, a filled one once merged; a hollow red cross when checks are failing or
+  changes were requested, a filled one when it was closed without merging; a question mark while
+  review comments are unresolved; and a clock while checks are running. A draft's button is faded,
+  and hovering it spells out the checks, the review and the comments.
+- A worktree whose pull request has been **merged**, with nothing committed in it since, is tagged
+  **merged** and its branch greyed: it can be reused or removed. Its GitHub button stays, and opens
+  the merged request.
+- When GitHub does not answer - no reply within 15 seconds, no connection, a server error - a
+  warning sign appears in the title bar, saying how old the pull request marks are; clicking it
+  tries again. A slow GitHub no longer holds up the rest of a refresh.
+- Fixed: the longest branch name is no longer cut short by one character for an ellipsis.
+
 ## v1.8.0
 
 - An **Android Studio** button, on worktrees that have an Android project, where Android Studio
