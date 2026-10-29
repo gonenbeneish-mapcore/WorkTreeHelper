@@ -217,3 +217,75 @@ public class StatusLeavesNoLockTests
         }
     }
 }
+public class NothingBeyondTests
+{
+    [Fact]
+    public async Task Says_whether_the_worktree_holds_anything_the_commit_does_not()
+    {
+        var repo = Path.Combine(Path.GetTempPath(), "WorktreeHelper.Tests." + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repo);
+        try
+        {
+            if (Git(repo, "init -q") is null || Git(repo, "config user.email test@example.invalid") is null ||
+                Git(repo, "config user.name test") is null) return; // no git here: nothing to show
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "one");
+            Git(repo, "add a.txt"); Git(repo, "commit -q -m one");
+            var first = Git(repo, "rev-parse HEAD")!.Trim();
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "two");
+            Git(repo, "commit -q -am two");
+            var second = Git(repo, "rev-parse HEAD")!.Trim();
+
+            // At what was merged: nothing beyond it.
+            Assert.True(await GitService.HasNothingBeyondAsync(repo, second));
+            // A commit made after it: there is.
+            Assert.False(await GitService.HasNothingBeyondAsync(repo, first));
+            // A commit this clone has never seen cannot be said to hold everything.
+            Assert.False(await GitService.HasNothingBeyondAsync(repo, new string('0', 40)));
+
+            // Behind what was merged, which someone else pushed to: still nothing beyond it.
+            Git(repo, $"checkout -q {first}");
+            Assert.True(await GitService.HasNothingBeyondAsync(repo, second));
+        }
+        finally
+        {
+            try { Directory.Delete(repo, recursive: true); } catch { }
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("HEAD")]
+    [InlineData("abc1234")]
+    [InlineData("--all")]
+    [InlineData("e990cb137f1e28d37fee5dd7c9fca70f6746d3f4 --all")]
+    [InlineData("E990CB137F1E28D37FEE5DD7C9FCA70F6746D3F4")]
+    public void Only_a_full_commit_id_reaches_git(string text)
+        => Assert.False(GitService.IsCommitId(text));
+
+    [Fact]
+    public void A_full_commit_id_is_one()
+        => Assert.True(GitService.IsCommitId("e990cb137f1e28d37fee5dd7c9fca70f6746d3f4"));
+
+    /// <summary>Runs git; its output, or null when it failed or is not there.</summary>
+    private static string? Git(string folder, string arguments)
+    {
+        try
+        {
+            using var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", arguments)
+            {
+                WorkingDirectory = folder,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            })!;
+            var output = git.StandardOutput.ReadToEnd();
+            git.WaitForExit();
+            return git.ExitCode == 0 ? output : null;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+}

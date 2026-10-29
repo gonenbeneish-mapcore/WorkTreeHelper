@@ -10,13 +10,14 @@
         <Root>\<Name>.worktrees\*      one folder per worktree
         <Root>\<Name>.origin.git       a bare repository standing in for the remote
 
-    The states are the point. Between them the four rows cover everything a row can show:
-    nothing at all, uncommitted files, commits waiting to be pushed, and commits waiting to
-    be pulled.
+    The states are the point. Between them the rows cover everything a row can show: nothing
+    at all, uncommitted files, commits waiting to be pushed, commits waiting to be pulled, and
+    a branch that has been merged.
 
         rubber-duck    main                        clean and level
         duck-bath      fix/sinks-in-the-bath       1 file open, 3 commits to pull
         duck-bubbles   spike/extra-bubbles         1 commit to push
+        duck-float     fix/float-the-right-way-up  clean and level, merged (in demo mode)
         duck-quack     feature/teach-it-to-quack   3 files open, 2 commits to push
 
     With -VisualStudio, duck-bath and duck-quack also carry a stand-in CreateVS-2026.bat, so
@@ -112,10 +113,12 @@ Invoke-Git $repo @('push', '-q', '-u', 'origin', 'main')
 $quack   = Join-Path $trees "duck-quack"
 $bath    = Join-Path $trees "duck-bath"
 $bubbles = Join-Path $trees "duck-bubbles"
+$float   = Join-Path $trees "duck-float"
 
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'feature/teach-it-to-quack', $quack, 'main')
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'fix/sinks-in-the-bath', $bath, 'main')
 Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'spike/extra-bubbles', $bubbles, 'main')
+Invoke-Git $repo @('worktree', 'add', '-q', '-b', 'fix/float-the-right-way-up', $float, 'main')
 
 # Asked for, two of them carry the Visual Studio script, committed before anything is pushed
 # so the states below come out the same as without it.
@@ -138,6 +141,13 @@ Invoke-Git $quack @('commit', '-qm', "A second noise")
 Write-Text (Join-Path $quack "honk.sh") "honk`n"
 Write-Text (Join-Path $quack "TODO.md") "- teach it to quack`n"
 Write-Text (Join-Path $quack "README.md") "# Rubber Duck`n`nIt listens. Soon it will answer.`n"
+
+# float: its one commit pushed, and nothing since. Only demo mode can say it was merged: the
+# remote here is a folder, with no pull requests to merge.
+Write-Text (Join-Path $float "float.sh") "float()`n{`n    echo `"right way up`"`n}`n"
+Invoke-Git $float @('add', '-A')
+Invoke-Git $float @('commit', '-qm', "Right way up")
+Invoke-Git $float @('push', '-q', '-u', 'origin', 'fix/float-the-right-way-up')
 
 # bubbles: one commit waiting to go out
 Invoke-Git $bubbles @('push', '-q', '-u', 'origin', 'spike/extra-bubbles')

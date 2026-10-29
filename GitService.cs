@@ -39,6 +39,33 @@ public static class GitService
         }
     }
 
+    /// <summary>
+    /// True when everything committed in the worktree is already in <paramref name="commit"/>:
+    /// HEAD is that commit or behind it. False when there is more, and when it cannot be told,
+    /// a commit this clone has never fetched for instance.
+    /// </summary>
+    public static async Task<bool> HasNothingBeyondAsync(string worktreePath, string commit, CancellationToken ct = default)
+    {
+        // A commit id from GitHub, and only one: it goes on git's command line.
+        if (!IsCommitId(commit)) return false;
+        try
+        {
+            var output = await RunGitAsync(worktreePath, $"rev-list --count {commit}..HEAD", ct).ConfigureAwait(false);
+            return output.Trim() == "0";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool IsCommitId(string text) =>
+        text.Length is 40 or 64 && text.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
     /// <summary>Parses `git status --porcelain=v2 --branch` output.</summary>
     public static WorktreeStatus ParseStatus(string porcelain)
     {

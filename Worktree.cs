@@ -32,7 +32,9 @@ public sealed class Worktree : INotifyPropertyChanged
     /// row shows what the old one showed, rather than starting bare - no Visual Studio button,
     /// no counts, no marks - and putting each back as it is found, which moved the window's
     /// size about for a worktree that had only gained a commit. The pull request stays only
-    /// on the same branch: it belongs to the branch, not the folder.
+    /// on the same branch: it belongs to the branch, not the folder. A merged or closed one
+    /// stays only at the same commit too: it counts while nothing is newer than it, and a new
+    /// commit is, whether or not GitHub can be asked again to say so.
     /// </remarks>
     public void TakeOverFrom(Worktree old)
     {
@@ -44,7 +46,8 @@ public sealed class Worktree : INotifyPropertyChanged
         IsFolderOpen = old.IsFolderOpen;
         HasAndroidStudio = old.HasAndroidStudio;
         IsOpenInAndroidStudio = old.IsOpenInAndroidStudio;
-        if (Branch == old.Branch) PullRequest = old.PullRequest;
+        if (Branch == old.Branch && (old.PullRequest is { FinishedAt: null } || Head == old.Head))
+            PullRequest = old.PullRequest;
     }
 
     /// <summary>Branch shown in the list: branch name, or "detached @ abc1234".</summary>
@@ -87,6 +90,8 @@ public sealed class Worktree : INotifyPropertyChanged
             Raise(nameof(StatusSummary));
             Raise(nameof(StatusTooltip));
             Raise(nameof(HasStatus));
+            Raise(nameof(HasNotes));
+            Raise(nameof(MergedTooltip));
         }
     }
 
@@ -113,6 +118,9 @@ public sealed class Worktree : INotifyPropertyChanged
         }
     }
     public bool HasStatus => StatusSummary.Length > 0;
+
+    /// <summary>Anything to show beside the branch: the counts, or the merged tag.</summary>
+    public bool HasNotes => HasStatus || IsMerged;
 
     /// <summary>
     /// What the counts beside the branch actually mean, in words, naming the upstream they
@@ -141,7 +149,8 @@ public sealed class Worktree : INotifyPropertyChanged
     private PullRequest? _pullRequest;
 
     /// <summary>
-    /// The open pull request this worktree's branch has, if it has one. Filled in per refresh
+    /// The pull request this worktree's branch has: the open one, or else the latest merged or
+    /// closed one, but only while nothing in the worktree is newer than it. Filled in per refresh
     /// from one query for the whole repository.
     /// </summary>
     public PullRequest? PullRequest
@@ -149,20 +158,98 @@ public sealed class Worktree : INotifyPropertyChanged
         get => _pullRequest;
         set
         {
-            if (ReferenceEquals(_pullRequest, value)) return;
+            // Compared by value: each refresh brings a new record of the same request.
+            if (Equals(_pullRequest, value)) return;
             _pullRequest = value;
             Raise(nameof(PullRequest));
             Raise(nameof(HasPullRequest));
             Raise(nameof(PullRequestTooltip));
+            Raise(nameof(PullRequestSignal));
+            Raise(nameof(IsMerged));
+            Raise(nameof(MergedTooltip));
+            Raise(nameof(HasNotes));
         }
     }
 
     public bool HasPullRequest => PullRequest is not null;
 
-    /// <summary>The pull request's number and title, and whether it is still a draft.</summary>
-    public string PullRequestTooltip => PullRequest is not { } pr
-        ? ""
-        : $"#{pr.Number}{(pr.IsDraft ? " (draft)" : "")}  {pr.Title}\nClick to open it in the browser";
+    /// <summary>
+    /// The branch went in, and nothing here has been committed since: the worktree is free to
+    /// be reused or removed.
+    /// </summary>
+    public bool IsMerged => PullRequest is { IsMerged: true };
+
+    /// <summary>What the mark on the pull request button says, if anything.</summary>
+    /// <remarks>
+    /// Merged, or closed without it; failing checks or changes asked for; comments not yet
+    /// resolved; checks not finished; approved with nothing failing. A request still in review is quiet, like a row with
+    /// nothing waiting in it. A draft is approved for nothing: it cannot be merged as it is.
+    /// </remarks>
+    public PullRequestSignal PullRequestSignal => PullRequest switch
+    {
+        null => PullRequestSignal.None,
+        { IsMerged: true } => PullRequestSignal.Merged,
+        { IsClosed: true } => PullRequestSignal.Closed,
+        { Checks: PullRequestChecks.Failing } or { Review: PullRequestReview.ChangesRequested } => PullRequestSignal.Failing,
+        { UnresolvedThreads: > 0 } => PullRequestSignal.Unresolved,
+        { Checks: PullRequestChecks.Pending } => PullRequestSignal.Running,
+        { IsDraft: false, Review: PullRequestReview.Approved } => PullRequestSignal.Approved,
+        _ => PullRequestSignal.None,
+    };
+
+    /// <summary>The pull request's number and title, and how it stands, in words.</summary>
+    public string PullRequestTooltip
+    {
+        get
+        {
+            if (PullRequest is not { } pr) return "";
+
+            var lines = new List<string> { $"#{pr.Number}{(pr.IsDraft ? " (draft)" : "")}  {pr.Title}" };
+            if (pr.MergedAt is { } merged)
+            {
+                lines.Add($"Merged on {Day(merged)}");
+            }
+            else if (pr.ClosedAt is { } closed)
+            {
+                lines.Add($"Closed without merging on {Day(closed)}");
+            }
+            else
+            {
+                switch (pr.Checks)
+                {
+                    case PullRequestChecks.Failing: lines.Add("Checks failing"); break;
+                    case PullRequestChecks.Pending: lines.Add("Checks still running"); break;
+                    case PullRequestChecks.Passing: lines.Add("Checks passing"); break;
+                }
+                // Not "waiting for review": every open request is, until it is one of these.
+                switch (pr.Review)
+                {
+                    case PullRequestReview.ChangesRequested: lines.Add("Changes requested"); break;
+                    case PullRequestReview.Approved: lines.Add("Approved"); break;
+                }
+                if (pr.UnresolvedThreads > 0)
+                    lines.Add($"{Plural(pr.UnresolvedThreads, "unresolved conversation")}");
+            }
+            lines.Add("Click to open it in the browser");
+            return string.Join("\n", lines);
+        }
+    }
+
+    /// <summary>What the "merged" tag beside the branch means, in words.</summary>
+    /// <remarks>
+    /// Commits are all that "merged" looks at. Files changed and not committed are still only
+    /// here, so for a worktree that has them it says so rather than that it can go.
+    /// </remarks>
+    public string MergedTooltip => PullRequest is { MergedAt: { } merged } pr
+        ? $"Merged in pull request #{pr.Number} on {Day(merged)}, and nothing committed here since.\n" +
+          (Status is { Changes: > 0 } s
+              ? $"But {Plural(s.Changes, "path")} here {(s.Changes == 1 ? "is" : "are")} uncommitted, and would be lost with the worktree."
+              : "This worktree can be reused or removed.")
+        : "";
+
+    /// <summary>A date the same way whatever the machine's language, since the rest of the text is English.</summary>
+    private static string Day(DateTimeOffset when) =>
+        when.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
 
     private bool _hasVisualStudio;
 
@@ -332,4 +419,24 @@ public sealed class Worktree : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// <summary>The mark on a row's pull request button.</summary>
+/// <remarks>Hollow while it can still change, filled once it is settled.</remarks>
+public enum PullRequestSignal
+{
+    /// <summary>Nothing to show, or no pull request.</summary>
+    None,
+    /// <summary>Checks failing, or changes asked for: a hollow red cross, it can still be put right.</summary>
+    Failing,
+    /// <summary>Closed without being merged: a filled red cross.</summary>
+    Closed,
+    /// <summary>Review conversations not yet resolved: an amber question mark.</summary>
+    Unresolved,
+    /// <summary>Its checks have not finished: a clock.</summary>
+    Running,
+    /// <summary>Approved, nothing failing, not merged yet: a hollow green tick.</summary>
+    Approved,
+    /// <summary>It has gone in: a filled green tick.</summary>
+    Merged,
 }

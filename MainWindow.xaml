@@ -465,6 +465,18 @@
                         <TextBlock Text="{Binding UpdateTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
                     </Button.ToolTip>
                 </Button>
+                <!-- GitHub did not answer the last refresh, so the pull request marks on the
+                     rows are as it last said. Beside Refresh, and doing what it does: trying
+                     again is all there is to do about it. In the theme's caution colour, the
+                     one thing in the caption that is, and only while it is so. -->
+                <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
+                        Content="&#xE7BA;" Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                        AutomationProperties.Name="GitHub did not answer"
+                        Visibility="{Binding HasGitHubProblem, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                    <Button.ToolTip>
+                        <TextBlock Text="{Binding GitHubProblemTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
+                    </Button.ToolTip>
+                </Button>
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh"
                         AutomationProperties.Name="Refresh"/>
@@ -634,15 +646,26 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="&#xE8AB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13"
                                                VerticalAlignment="Center" Margin="0,0,5,0" Style="{StaticResource MutedText}"/>
+                                    <!-- Muted once the branch has been merged: the work in it is done. -->
                                     <TextBlock Grid.Column="1" Text="{Binding DisplayBranch}" FontFamily="Cascadia Code, Cascadia Mono, Consolas" FontSize="12"
-                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayBranch}"/>
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayBranch}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMerged}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
 
-                                    <!-- Uncommitted work and drift from upstream. Nothing is drawn for a
-                                         worktree that is clean and level, so a quiet row means there is
-                                         nothing waiting in it. -->
+                                    <!-- Uncommitted work and drift from upstream, and whether the branch
+                                         has been merged. Nothing is drawn for a worktree that is clean
+                                         and level, so a quiet row means there is nothing waiting in it. -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                                                 HorizontalAlignment="Left" Margin="8,0,0,0"
-                                                Visibility="{Binding HasStatus, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                                Visibility="{Binding HasNotes, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                         <!-- The same tone as the count beside it. Caution amber cried wolf over
                                              ordinary uncommitted work, and the theme's "attention" brush is the
                                              accent colour, which already means "open in VS Code". -->
@@ -652,7 +675,27 @@
                                         <TextBlock Text="{Binding StatusSummary}" FontSize="10" VerticalAlignment="Center"
                                                    FontFamily="Cascadia Code, Cascadia Mono, Consolas"
                                                    Style="{StaticResource MutedText}"
-                                                   ToolTip="{Binding StatusTooltip}"/>
+                                                   ToolTip="{Binding StatusTooltip}"
+                                                   Visibility="{Binding HasStatus, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                                        <!-- The branch went in and nothing has been committed here since.
+                                             Outlined and muted like the locked and prunable tags: it is
+                                             something to tidy up when convenient, not something wrong. -->
+                                        <Border Padding="5,0" CornerRadius="4" VerticalAlignment="Center"
+                                                BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorSecondaryBrush}"
+                                                Background="Transparent" ToolTip="{Binding MergedTooltip}"
+                                                Visibility="{Binding IsMerged, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasStatus}" Value="True">
+                                                            <Setter Property="Margin" Value="6,0,0,0"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="merged" FontSize="9" Style="{StaticResource MutedText}"/>
+                                        </Border>
                                     </StackPanel>
                                 </Grid>
 
@@ -817,11 +860,11 @@
                                             </Grid>
                                         </Button>
                                     </StackPanel>
-                                    <!-- Only where the branch has an open pull request. -->
+                                    <!-- Only where the branch has a pull request, open or merged. -->
                                     <StackPanel Orientation="Horizontal"
                                                 Visibility="{Binding ShowPullRequestButton, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static local:BoolToVisibilityConverter.Instance}}">
                                         <Button Style="{StaticResource PrButton}" Click="OpenPullRequest_Click"
-                                                Tag="{Binding PullRequest}" Content="{StaticResource GitHubMark}"
+                                                Tag="{Binding PullRequest}"
                                                 AutomationProperties.Name="Open the pull request">
                                             <Button.Visibility>
                                                 <MultiBinding Converter="{x:Static local:SlotVisibility.Instance}">
@@ -832,6 +875,130 @@
                                             <Button.ToolTip>
                                                 <TextBlock Text="{Binding PullRequestTooltip}" TextWrapping="Wrap" MaxWidth="380"/>
                                             </Button.ToolTip>
+                                            <!-- How the request stands, as a badge on the mark's corner. Hollow
+                                                 while it can still change, filled once settled: a green tick
+                                                 when approved, filled once merged; a red cross when failing its
+                                                 checks or sent back with changes, filled once closed unmerged.
+                                                 An amber question mark while review comments are unresolved, a
+                                                 grey clock while its checks run. Nothing while it is in review.
+                                                 A symbol rather than a coloured dot, which said nothing without
+                                                 the tooltip. Fixed colours, legible on either theme. A draft's
+                                                 mark is faded, as GitHub greys a draft.
+
+                                                 The badge stands off the mark through a gap cut out of the mark,
+                                                 not a ring painted round the badge: a ring has to be some colour,
+                                                 and whichever it was, it showed against the row in one theme or
+                                                 when the row lit up under the pointer. A gap is whatever is
+                                                 behind it, and so are the hollow badges' insides. -->
+                                            <Grid>
+                                                <ContentPresenter Content="{StaticResource GitHubMark}">
+                                                    <ContentPresenter.Style>
+                                                        <Style TargetType="ContentPresenter">
+                                                            <!-- The mark is 16 square and the badge sits on its corner,
+                                                                 centred at 14.5, 5.5 across: the gap is a pixel wider. -->
+                                                            <Setter Property="OpacityMask">
+                                                                <Setter.Value>
+                                                                    <DrawingBrush>
+                                                                        <DrawingBrush.Drawing>
+                                                                            <GeometryDrawing Brush="Black">
+                                                                                <GeometryDrawing.Geometry>
+                                                                                    <CombinedGeometry GeometryCombineMode="Exclude">
+                                                                                        <CombinedGeometry.Geometry1>
+                                                                                            <RectangleGeometry Rect="0,0,16,16"/>
+                                                                                        </CombinedGeometry.Geometry1>
+                                                                                        <CombinedGeometry.Geometry2>
+                                                                                            <EllipseGeometry Center="14.5,14.5" RadiusX="6.5" RadiusY="6.5"/>
+                                                                                        </CombinedGeometry.Geometry2>
+                                                                                    </CombinedGeometry>
+                                                                                </GeometryDrawing.Geometry>
+                                                                            </GeometryDrawing>
+                                                                        </DrawingBrush.Drawing>
+                                                                    </DrawingBrush>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Style.Triggers>
+                                                                <!-- No badge, no gap. -->
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="None">
+                                                                    <Setter Property="OpacityMask" Value="{x:Null}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding PullRequest.IsDraft}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.5"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ContentPresenter.Style>
+                                                </ContentPresenter>
+                                                <Border Width="11" Height="11" CornerRadius="5.5" Margin="0,0,-4,-4"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Merged">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="#2DA44E"/>
+                                                                    <Setter Property="Tag" Value="&#xE73E;"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Closed">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="#CF222E"/>
+                                                                    <Setter Property="Tag" Value="&#xE711;"/>
+                                                                </DataTrigger>
+                                                                <!-- The closed cross's outline: it can still be put right. -->
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Failing">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="Transparent"/>
+                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                    <Setter Property="BorderBrush" Value="#E5534B"/>
+                                                                    <Setter Property="Tag" Value="&#xE711;"/>
+                                                                </DataTrigger>
+                                                                <!-- A plain question mark, in text: the icon font's own is ringed,
+                                                                     a circle inside the circle. -->
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Unresolved">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="#BF8700"/>
+                                                                    <Setter Property="Tag" Value="?"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Running">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="#6E7781"/>
+                                                                    <Setter Property="Tag" Value="&#xE823;"/>
+                                                                </DataTrigger>
+                                                                <!-- The merged tick's outline: a step short of it. -->
+                                                                <DataTrigger Binding="{Binding PullRequestSignal}" Value="Approved">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Background" Value="Transparent"/>
+                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                    <Setter Property="BorderBrush" Value="#2DA44E"/>
+                                                                    <Setter Property="Tag" Value="&#xE73E;"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Border}}"
+                                                               FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="White"/>
+                                                                <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                                                                <Setter Property="FontSize" Value="6"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding PullRequestSignal}" Value="Approved">
+                                                                        <Setter Property="Foreground" Value="#2DA44E"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding PullRequestSignal}" Value="Failing">
+                                                                        <Setter Property="Foreground" Value="#E5534B"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding PullRequestSignal}" Value="Unresolved">
+                                                                        <Setter Property="FontFamily" Value="Segoe UI"/>
+                                                                        <Setter Property="FontSize" Value="8"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                            </Grid>
                                         </Button>
                                     </StackPanel>
                                 </StackPanel>

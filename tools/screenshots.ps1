@@ -9,8 +9,8 @@
     The copy it runs is kept apart from the user's own: WORKTREEHELPER_SETTINGS gives it its
     own settings file, which also gives it its own single-instance lock, so a copy already
     running is neither read, written, nor brought forward. WORKTREEHELPER_DEMO=1 gives the
-    picture what the demo repository cannot have for real - a pull request on duck-quack,
-    and windows open on duck-bath and duck-quack - and leaves the update check out, so no
+    picture what the demo repository cannot have for real - a pull request on duck-quack, an
+    approved one on duck-bubbles, a merged one on duck-float, and windows open on duck-bath and duck-quack - and leaves the update check out, so no
     notice of a newer release lands in it.
 
     The pictures come out at the display scaling of the machine running this, as a user of

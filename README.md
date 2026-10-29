@@ -3,7 +3,7 @@
 Every folder your project is checked out into, in one small window, with a button to open each
 one where you work.
 
-![The window listing four worktrees of a project, each with its branch, what is uncommitted or unpushed in it, and its row of buttons](docs/screenshot.png)
+![The window listing five worktrees of a project, each with its branch, what is uncommitted or unpushed in it, and its row of buttons](docs/screenshot.png)
 
 ## What it is
 
@@ -34,7 +34,7 @@ one already has the worktree open, and clicking it brings that window forward ra
 | Git Extensions | **Git Extensions**, on that worktree's history. Only where Git Extensions is installed. |
 | Visual Studio | **Visual Studio** — only for projects set up for it, and where Visual Studio is installed, which is why it is not in the picture; see [The Visual Studio button](#the-visual-studio-button). With a folder on it, the folder mode. |
 | Android Studio | The worktree's Android project in **Android Studio**, `MapCore\Android\Test\McAndroidTester` unless Options says otherwise — only for worktrees that have it, and where Android Studio is installed; see [The Android Studio button](#the-android-studio-button). |
-| GitHub | The open **pull request** for that branch, in your browser. Only on branches that have one. |
+| GitHub | The **pull request** for that branch, in your browser, with a dot saying how it stands; see [The pull request button](#the-pull-request-button). Only on branches that have one. |
 
 Any of them can be turned off in **Options**. **Right-click a row** for the same things, whether
 their buttons are showing or not, plus **Copy path** and **Copy branch name**. Hovering a row
@@ -156,8 +156,8 @@ that is refused they assert nothing rather than failing on the environment.
 tools\make-demo-repo.ps1
 ```
 
-builds `demo\rubber-duck`, which git ignores: a throwaway repository whose four worktrees
-are each left in a different state — clean, files open, commits to push, commits to pull —
+builds `demo\rubber-duck`, which git ignores: a throwaway repository whose worktrees
+are each left in a different state — clean, files open, commits to push, commits to pull, merged —
 which is what the picture at the top of this file is of. Handy for trying a change against
 something other than your own work. `-VisualStudio` gives two of the rows a stand-in Visual Studio
 script so the Visual Studio buttons show, `-Root` and `-Name` put it elsewhere, and `-Remove` takes it
@@ -171,7 +171,7 @@ retakes the README's two pictures from that repository: it builds it afresh, run
 against it and captures the main window and Options. The copy it runs has a settings file of its
 own (`WORKTREEHELPER_SETTINGS`), and with it its own single-instance lock, so a copy you have
 running is left alone. It runs in demo mode (`WORKTREEHELPER_DEMO=1`), which gives the picture a
-pull request and two windows marked open, since the demo repository has no GitHub remote and
+pull request with failing checks, an approved one, a merged one and two windows marked open, since the demo repository has no GitHub remote and
 nothing open, and skips the update check. The pictures come out at the display scaling of the
 machine; the README's are at 125%.
 
@@ -257,7 +257,49 @@ project just opened may take a moment to be marked.
 ## The pull request button
 
 A worktree whose branch has an open pull request gets a button carrying GitHub's mark at the end
-of its row, which opens it in the default browser; hovering names and numbers it, and says if it is still a draft.
+of its row, which opens it in the default browser. A badge on the mark's corner says how the
+request stands:
+
+| Badge | Means |
+|---|---|
+| Hollow green tick | Approved, with nothing failing: waiting to be merged. |
+| Filled green tick | Merged — see below. |
+| Hollow red cross | Checks are failing, or a reviewer asked for changes: it can still be put right. |
+| Filled red cross | Closed without merging. |
+| Amber question mark | Review comments not yet resolved. |
+| Grey clock | Its checks are still running. |
+| Faded mark | A draft. It can carry a badge too. |
+| None | In review, nothing failing: nothing to do yet. |
+
+Hollow means it can still change; filled means it is settled. Where more than one applies, the
+first in this order shows: merged, closed, failing, unresolved comments, running, approved. The
+question mark counts review conversations — comments on the code, which GitHub lets you resolve —
+not the PR's general comments, which cannot be.
+
+Hovering the button names and numbers the request and says the same in words: checks failing,
+running or passing; approved, or changes requested; how many conversations are
+unresolved; merged or closed, and when.
+A merged or closed request stays on the button only while nothing has been committed in the
+worktree since; an open one on the same branch always comes first.
+
+**Merged branches.** Once a branch's pull request has been merged, and the worktree holds nothing
+that was not in it, the row says **merged** beside the branch and greys the branch name: the
+worktree can be reused or removed. "Nothing that was not in it" is asked of git — the worktree's
+`HEAD` is the commit that was merged, or behind it — rather than whether the branch is in `main`,
+which a squash merge never makes true and a branch just made from `main` always does. Commit
+again on the branch and the tag goes.
+
+When GitHub does not answer a refresh - nothing within 15 seconds, no connection, a server
+error - the marks stay as it last gave them, and a warning sign in the title bar says so and how
+old they are; clicking it tries again. A GitHub that refuses, as a private repository does
+without a token, is not a failure and says nothing. Pull requests from forks are left out, even
+when their branch has the same name as one of yours.
+
+The checks, the review and the merges come from one GraphQL query per refresh, asking only about
+the branches the worktrees are on. GraphQL takes no anonymous calls, so without a token (below) a
+public repository still gets its buttons, from the REST list of open pull requests, but no badges
+and no merged tags.
+
 The repository is taken from `remote.origin.url`, so this needs no configuration and nothing
 installed — but a **private** repository needs a token to read, and the app will not ask you for
 one. It looks in `GH_TOKEN`, `GITHUB_TOKEN`, then `gh auth token` if the GitHub CLI happens to be
@@ -299,7 +341,7 @@ uses too). Where none of those answer, no buttons appear. A public repository ne
 | `Demo.cs` | The demo mode the README's pictures are taken in |
 | `VisualStudioInstances.cs` | The same for Visual Studio, through the Running Object Table |
 | `VisualStudioInstance.cs` | One instance: what it has open, and which of the two ways |
-| `PullRequests.cs` | The open pull requests of the repository, by branch |
+| `PullRequests.cs` | The pull requests of the worktrees' branches, open, merged or closed, with their checks and review |
 | `GitHubToken.cs` | A GitHub token the machine already keeps, for pull requests and the update check |
 | `Commands.cs` | Runs git and gh quietly, for the GitHub lookups |
 | `UpdateService.cs` | Finds a newer GitHub release, and installs it over this copy |

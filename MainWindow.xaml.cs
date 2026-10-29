@@ -95,6 +95,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     public bool HasUpdate => Update is not null;
 
+    private string? _gitHubProblem;
+    /// <summary>
+    /// Why the last refresh could not ask GitHub about the pull requests: no answer in time, no
+    /// connection, a server error. Null once it answers, and while it has never been asked.
+    /// </summary>
+    /// <remarks>
+    /// The marks on the rows are kept from the last answer rather than taken away, so without
+    /// this they would look current when they are not.
+    /// </remarks>
+    public string? GitHubProblem
+    {
+        get => _gitHubProblem;
+        private set
+        {
+            if (!Set(ref _gitHubProblem, value)) return;
+            OnPropertyChanged(nameof(HasGitHubProblem));
+            OnPropertyChanged(nameof(GitHubProblemTooltip));
+        }
+    }
+    public bool HasGitHubProblem => GitHubProblem is not null;
+
+    /// <summary>When GitHub last answered, which is how old the marks on the rows are.</summary>
+    private DateTime? _gitHubAnsweredAt;
+
+    public string GitHubProblemTooltip => GitHubProblem is not { } problem ? "" :
+        $"Pull requests could not be checked: {problem}.\n" +
+        (_gitHubAnsweredAt is { } at
+            ? $"The marks shown are from {at:HH:mm}."
+            : "No pull requests are shown until it answers.") +
+        "\nClick to try again.";
+
     /// <summary>
     /// What the caption button reads. The version is written on it rather than left to the
     /// tooltip: a button nobody hovers says nothing, and this one has one job to advertise.
@@ -1476,7 +1507,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Attaches each worktree's open pull request, if its branch has one. One query answers
+    /// Attaches each worktree's pull request, if its branch has one: the open one, or else the
+    /// latest merged or closed one, while nothing in the worktree is newer than it. One query answers
     /// for the whole repository, so this costs the same whether there are two worktrees or ten.
     /// </summary>
     private async Task UpdatePullRequestsAsync(CancellationToken ct)
@@ -1490,13 +1522,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        // Null when GitHub could not be asked, which leaves the buttons as they were rather
-        // than taking them all away until it can.
-        var open = await PullRequests.OpenByBranchAsync(RepoPath, ct);
-        if (open is null || ct.IsCancellationRequested) return;
+        // Nothing found when GitHub could not be asked, which leaves the buttons as they were
+        // rather than taking them all away until it can, and says why in the caption.
+        var lookup = await PullRequests.ByBranchAsync(RepoPath, targets.Select(w => w.Branch).Distinct().ToList(), ct);
+        if (ct.IsCancellationRequested) return;
+        if (lookup.Found is not { } found)
+        {
+            GitHubProblem = lookup.Problem;
+            return;
+        }
+        _gitHubAnsweredAt = DateTime.Now;
+        GitHubProblem = null;
 
-        foreach (var worktree in targets)
-            worktree.PullRequest = open.GetValueOrDefault(worktree.Branch);
+        // A finished request counts only while the worktree holds nothing it did not: the branch
+        // may have gone on to more work, or been reused under the same name. Asked of git rather
+        // than judged by "is the branch in main", which a squash merge never makes true and a
+        // branch just made from main always does.
+        var pullRequests = await Task.WhenAll(targets.Select(async worktree =>
+            found.Open.GetValueOrDefault(worktree.Branch) is { } open ? open
+            : found.Finished.GetValueOrDefault(worktree.Branch) is { } finished
+              && await GitService.HasNothingBeyondAsync(worktree.Path, finished.HeadSha, ct) ? finished
+            : null));
+        if (ct.IsCancellationRequested) return;
+
+        for (var i = 0; i < targets.Count; i++)
+            targets[i].PullRequest = pullRequests[i];
     }
 
     /// <summary>
