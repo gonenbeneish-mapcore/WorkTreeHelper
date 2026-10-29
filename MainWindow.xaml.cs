@@ -1605,8 +1605,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // fraction narrower than asked, and wrapped text such as the what's-new notes then
         // wraps its longest line once more: a line taller than was measured, so the last line
         // of the notes, or the last row under them, was cut off at the bottom.
+        //
+        // And one pixel more than asked for. Layout rounding takes each text's width to the
+        // nearest pixel, so the longest branch name can ask for up to half a pixel less than
+        // it is wide; given exactly that, it trims its last character for an ellipsis.
         var dpi = VisualTreeHelper.GetDpi(this);
-        var width = Math.Min(Math.Max(root.DesiredSize.Width, MinWidth), limit.Width);
+        var width = Math.Min(Math.Max(root.DesiredSize.Width + 1 / dpi.DpiScaleX, MinWidth), limit.Width);
         width = Math.Min(Math.Ceiling(width * dpi.DpiScaleX) / dpi.DpiScaleX, limit.Width);
 
         // The height at that width, which is not always the height asked for at the width the
