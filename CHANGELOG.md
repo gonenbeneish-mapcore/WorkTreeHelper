@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.10.0
+
+- **Start with Windows**, in Options under where it lives: it starts as you sign in, the same as
+  opening it yourself, in the tray or on the taskbar, whichever is chosen. Turning it off in Task
+  Manager's Startup apps shows here as off.
+
 ## v1.9.0
 
 - The **GitHub** button says how its pull request stands, with a badge on its corner: a hollow
