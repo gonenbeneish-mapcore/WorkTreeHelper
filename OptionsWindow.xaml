@@ -88,6 +88,10 @@
                            Text="A taskbar button and an Alt+Tab entry, and no tray icon. Closing the window exits the app."/>
             </StackPanel>
         </Grid>
+        <!-- Under where it lives: started at sign-in, it starts the way it is chosen above. -->
+        <CheckBox Content="Start with Windows" Margin="0,8,0,0" IsChecked="{Binding StartsWithWindows}"/>
+        <TextBlock Style="{StaticResource Explains}"
+                   Text="Starts when you sign in to Windows, the same as opening it yourself: in the tray or on the taskbar, whichever is chosen above."/>
 
         <!-- The two IDEs side by side, like the pairs of choices, to keep the window short.
 

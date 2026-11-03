@@ -381,6 +381,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set { if (value != ShowInTaskbar) ApplyShowInTaskbar(value); }
     }
 
+    /// <summary>
+    /// Whether Windows starts the app at sign-in. Read from the registry each time, since Task
+    /// Manager can turn it off from outside.
+    /// </summary>
+    public bool StartsWithWindows
+    {
+        get => StartWithWindows.ForUser.IsOn;
+        set
+        {
+            if (Environment.ProcessPath is not { } exe) return;
+            if (!StartWithWindows.ForUser.Set(value, exe))
+                Fail("Windows would not let the app change whether it starts at sign-in.");
+            OnPropertyChanged(nameof(StartsWithWindows));
+        }
+    }
+
+    /// <summary>
+    /// Whether this copy takes an entry that is on as its own when it starts. Only the user's
+    /// usual copy: one with a settings file of its own - a test build, the one the README's
+    /// pictures are taken with - would otherwise take it over just by running, and be what
+    /// starts the next morning. Ticked in such a copy's Options, it is that copy's to have.
+    /// </summary>
+    private static bool FollowsStartWithWindows => Settings.OverridePath is null;
+
     /// <summary>Whether a row may offer the other kind of Visual Studio once one is open.</summary>
     public bool AllowSecondVisualStudio
     {
@@ -673,6 +697,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         // Whatever an earlier update renamed aside is of no further use.
         UpdateService.CleanUpPreviousVersion();
+
+        // An app moved since it was set to start at sign-in would leave Windows starting a
+        // file that is not there; the entry follows it. An update replaces the exe in place,
+        // so it needs nothing.
+        if (FollowsStartWithWindows && Environment.ProcessPath is { } exe)
+            StartWithWindows.ForUser.Follow(exe);
 
         _updateCheck.Tick += (_, _) => _ = CheckForUpdateAsync();
         _updateCheck.Start();

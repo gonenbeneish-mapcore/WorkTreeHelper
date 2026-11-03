@@ -65,6 +65,7 @@ The gear in the title bar opens them; every change applies as you make it.
 |---|---|
 | **Repository** | The one listed. **Browse…** for another, or type its path and press **Open** — the way to open one through a symbolic link. |
 | **Where it lives** | **System tray** (the default) or **Taskbar** — see above. |
+| **Start with Windows** | Off by default. On, Windows starts it as you sign in, the same as opening it yourself: in the tray or on the taskbar, whichever **Where it lives** says. It is an entry under your own `Run` key, so it needs no administrator, and Task Manager's **Startup apps** lists it as *Worktree Helper* and can turn it off, which this box then shows. Moved, the app takes the entry with it the next time it starts; a copy run with a settings file of its own (`WORKTREEHELPER_SETTINGS`) never takes it over that way, only by having its box ticked. |
 | **Visual Studio** | *Allow a second Visual Studio on the same worktree* (on by default): once the solution or the folder is open, the row offers the other one too. Off: it only offers to bring back the one that is open. |
 | **Android Studio** | The Android project's folder in each worktree, from the worktree's root: `MapCore\Android\Test\McAndroidTester` by default. A full path pasted from one worktree is made relative to it. It applies as you type, once you pause, and the rows gain or lose the button to match. |
 | **Buttons** | Which of the seven buttons the rows carry, each shown with its icon; all of them by default. VS Code, Git Extensions, Visual Studio and Android Studio are unticked on a computer that does not have them, and ticking one then offers to **Locate** its `.exe` yourself, which is remembered. A button turned off is still on the row's right-click menu. |
@@ -73,7 +74,8 @@ The gear in the title bar opens them; every change applies as you make it.
 ## Install
 
 Grab `WorkTreeHelper-V*.zip` from the releases and unzip `WorktreeHelper.exe` anywhere — there
-is no installer, and the app writes only `%APPDATA%\WorktreeHelper\settings.json`.
+is no installer, and the app writes only `%APPDATA%\WorktreeHelper\settings.json` — and, if you
+turn on **Start with Windows**, its entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 It needs:
 
@@ -321,6 +323,7 @@ uses too). Where none of those answer, no buttons appear. A public repository ne
 |------|---------|
 | `App.xaml(.cs)` | Fluent theme following the OS theme; the single-instance gate; the GitHub mark and icon style both windows share |
 | `SingleInstance.cs` | Mutex plus a broadcast that raises the copy already running |
+| `StartWithWindows.cs` | The sign-in entry under the user's `Run` key, and what Task Manager says of it |
 | `app.manifest` | PerMonitorV2 DPI awareness, long paths |
 | `MainWindow.xaml(.cs)` | UI and view logic |
 | `OptionsWindow.xaml(.cs)` | The options, bound straight to the main window’s own properties |
