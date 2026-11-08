@@ -2,19 +2,11 @@
 
 ## v1.11.4
 
-- On the taskbar, the title bar has a **minimise** button beside Close, as other windows do. In the
-  tray there is still none: closing puts the window away there.
-- The window **flies to where it is put away**: minimised, it shrinks into its own taskbar button
-  rather than towards the middle of the taskbar; closed to the tray, it shrinks into the tray icon,
-  where before it simply vanished. It comes back out the same way, with rounded corners and a soft
-  shadow, easing in and out. However it is minimised - the button, `Esc`, the taskbar button,
-  Win+Down - and it follows Windows' own switch for animations.
-- **Options opens out of the gear** that was clicked, growing as it comes and settling into place
-  with a little spring, and closes back into it. Before, Windows' own animation was over before
-  the window had drawn anything, so the options just appeared, and vanished.
-- The window's own slide, as it grows to fit the list or shrinks when a notice folds away, is
-  drawn as it goes: before, the list stopped being painted for most of the way, so an empty box
-  grew and the caption vanished, and then everything jumped into place at the end.
+- On the taskbar, the title bar has a **minimise** button beside Close.
+- Minimised, the window **flies into its taskbar button**; closed to the tray, into the tray icon.
+  It comes back out the same way.
+- **Options opens out of the gear** and closes back into it.
+- The window **no longer jumps** as it grows or shrinks: the list is drawn the whole way.
 
 ## v1.10.0
 
