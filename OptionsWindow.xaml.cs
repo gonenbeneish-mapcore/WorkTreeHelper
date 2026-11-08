@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
@@ -59,6 +60,57 @@ public partial class OptionsWindow : Window
         base.OnSourceInitialized(e);
         // The same caption as the window it belongs to, rather than the Windows accent.
         TitleBar.Match(this);
+
+        // Windows plays its open animation the moment the window is shown, and this one is
+        // tall and takes a while to draw its first frame: measured, the animation was over
+        // in some 30 ms, most of it spent on a window with nothing in it yet, and the
+        // options simply appeared. So it is shown cloaked, and once it has drawn itself a
+        // picture of it opens out in its place (WindowFlight.Zoom) and it is uncovered.
+        _hwnd = new WindowInteropHelper(this).Handle;
+        if (WindowFlight.Wanted)
+        {
+            WindowFlight.SetSystemTransitions(_hwnd, false);
+            WindowFlight.Cloak(_hwnd, true);
+            _opening = true;
+        }
+    }
+
+    private IntPtr _hwnd;
+
+    /// <summary>Still cloaked, or opening out: it has not yet been uncovered.</summary>
+    private bool _opening;
+
+    /// <summary>Closing in on the gear: the window is still there, under the animation.</summary>
+    private bool _closingIn;
+
+    /// <summary>The animation is over and this close is the real one.</summary>
+    private bool _closeNow;
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        if (_opening) _ = OpenOutAsync();
+    }
+
+    private async Task OpenOutAsync()
+    {
+        try
+        {
+            // Rendered is not yet presented: a pass at the lowest priority, after the frame,
+            // so the picture is of the options and not of an empty window.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            // Out of the gear that was clicked, when it is there to come out of.
+            var flight = WindowFlight.ZoomLive(_hwnd, opening: true, _owner.OptionsButtonBounds());
+            await flight.Arrived;
+            WindowFlight.Cloak(_hwnd, false);
+            flight.Release();
+        }
+        finally
+        {
+            // Whatever happened, it is not left invisible.
+            WindowFlight.Cloak(_hwnd, false);
+            _opening = false;
+        }
     }
 
     /// <summary>The window has closed, and cannot own a dialog any more.</summary>
@@ -69,6 +121,42 @@ public partial class OptionsWindow : Window
         // Closed before typing paused long enough for it to apply.
         if (_androidProjectPause.IsEnabled) ApplyAndroidProject();
         base.OnClosing(e);
+
+        // Closing as the user asked: a picture of it closes in on itself first, and it closes
+        // for real underneath. Never while the app itself is going, which must not wait.
+        if (e.Cancel || _closeNow || _owner.IsExiting) return;
+        // Already closing in: any other request to close waits for it. One press of Esc asks
+        // twice — the Close button is the cancel button, which closes the dialog itself, and
+        // its click closes it too — and the second used to go straight through, closing the
+        // window under its own animation: one white frame, then nothing.
+        if (_closingIn)
+        {
+            e.Cancel = true;
+            return;
+        }
+        if (_opening || !WindowFlight.Wanted) return;
+        e.Cancel = true;
+        _closingIn = true;
+        _ = CloseInAsync();
+    }
+
+    private async Task CloseInAsync()
+    {
+        // Back into the gear, wherever the window is now.
+        var flight = WindowFlight.ZoomLive(_hwnd, opening: false, _owner.OptionsButtonBounds());
+        try
+        {
+            await flight.Shown;
+            // Out of sight, while the compositor goes on drawing it for the thumbnail.
+            WindowFlight.Cloak(_hwnd, true);
+            await flight.Arrived;
+        }
+        finally
+        {
+            flight.Release();
+            _closeNow = true;
+            Close();
+        }
     }
 
     protected override void OnClosed(EventArgs e)

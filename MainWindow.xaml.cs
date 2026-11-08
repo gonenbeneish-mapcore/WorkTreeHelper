@@ -24,6 +24,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private TrayIcon? _tray;
     private bool _exiting;
 
+    /// <summary>The app is on its way out: nothing should hold it up with an animation.</summary>
+    internal bool IsExiting => _exiting || Dispatcher.HasShutdownStarted;
+
     public ObservableCollection<Worktree> Worktrees { get; } = new();
 
     private string _repoPath = "";
@@ -625,13 +628,34 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Options_Click(object sender, RoutedEventArgs e) => ShowOptions();
 
+    /// <summary>
+    /// Where the gear is on screen, in physical pixels, for Options to open out of and close
+    /// back into. Null while the window is away, and then Options grows where it stands.
+    /// </summary>
+    internal ScreenRect? OptionsButtonBounds()
+    {
+        if (!IsVisible || WindowState == WindowState.Minimized || !OptionsButton.IsVisible) return null;
+        try
+        {
+            // PointToScreen answers in device pixels, as the rest of the flight works.
+            var topLeft = OptionsButton.PointToScreen(new Point(0, 0));
+            var bottomRight = OptionsButton.PointToScreen(new Point(OptionsButton.ActualWidth, OptionsButton.ActualHeight));
+            return new ScreenRect((int)Math.Round(topLeft.X), (int)Math.Round(topLeft.Y),
+                (int)Math.Round(bottomRight.X), (int)Math.Round(bottomRight.Y));
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // not connected to a source just now
+        }
+    }
+
     /// <summary>The options window while it is open, so the tray menu cannot open another.</summary>
     private OptionsWindow? _options;
 
     private void ShowOptions()
     {
         // From the tray menu the window may be away, and the options belong to it.
-        if (!IsVisible || WindowState == WindowState.Minimized) ShowFromTray();
+        if (!IsVisible || WindowState == WindowState.Minimized) ShowFromTray(fly: false);
 
         // The tray menu still works while Options is up, being a window of its own.
         if (_options is not null)
@@ -681,6 +705,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Before the handle exists, which is the one place setting this costs nothing: WPF then
         // simply creates the window with the taskbar style it is going to keep.
         ShowInTaskbar = _settings.ShowInTaskbar;
+        // The caption bound to these when the DataContext was set, a few lines up, and saw
+        // the tray: the minimize button would stay hidden in the taskbar without this.
+        OnPropertyChanged(nameof(LivesInTaskbar));
+        OnPropertyChanged(nameof(CloseHint));
         ShowTaskbarQuestion = !_settings.AskedAboutTaskbar;
         TrackTool(VsCodeTool, _settings.ShowCodeButton, _settings.VsCodePath,
             t => (_settings.ShowCodeButton, _settings.VsCodePath) = (t.Wanted, t.Chosen));
@@ -738,6 +766,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Activated += (_, _) =>
         {
             _ = UpdateOpenStateAsync();
+            // Where the taskbar button is, ahead of the next minimise: the first lookup in a
+            // process is the slow one, and buttons move as other windows come and go.
+            if (ShowInTaskbar) TaskbarButton.Refresh(Hwnd, AppName);
             // Cheap, and it catches a switch between light and dark made while the window
             // was away: Windows repaints the body but leaves the caption as it was.
             TitleBar.Match(this);
@@ -754,9 +785,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (WindowState == WindowState.Minimized)
             {
                 SavePlacement();
+                // Put down by something other than the flight — Win+D, say — so there is no
+                // picture of it to fly back with, and Windows brings it back itself.
+                if (!_flying) DropAwayShot();
                 return;
             }
 
+            // Back by a way the flight did not catch: let Windows animate it from now on.
+            if (!_flying) WindowFlight.SetSystemTransitions(Hwnd, true);
             _ = RefreshAsync();
             AnnounceUpdate();
         };
@@ -821,10 +857,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ApplyIcon();
 
         if (PresentationSource.FromVisual(this) is HwndSource source)
-            source.AddHook((IntPtr _, int msg, IntPtr _, IntPtr _, ref bool _) =>
+            source.AddHook((IntPtr _, int msg, IntPtr wParam, IntPtr _, ref bool handled) =>
             {
                 // A second launch broadcasts instead of starting a rival copy of the app.
                 if ((uint)msg == SingleInstance.ShowMessage) ShowFromTray();
+
+                // Every way of minimising and restoring arrives as one of these — the
+                // taskbar button, Win+Down, Alt+Tab back to it — so the flight is played
+                // for all of them, not just for the caption's button. Taken over only when
+                // there is a flight to play; otherwise Windows does what it always did.
+                if (msg == WM_SYSCOMMAND)
+                {
+                    var command = (int)(wParam.ToInt64() & 0xFFF0);
+                    if (command == SC_MINIMIZE && ShowInTaskbar && WindowFlight.Wanted && !_flying)
+                    {
+                        handled = true;
+                        Dispatcher.BeginInvoke(MinimizeToTaskbar);
+                    }
+                    else if (command == SC_RESTORE && WindowState == WindowState.Minimized && _awayShot is not null && !_flying)
+                    {
+                        handled = true;
+                        Dispatcher.BeginInvoke(() => _ = RestoreFromTaskbarAsync());
+                    }
+                }
 
                 // Windows announces a change of theme here. The icon has a colourway for
                 // each, and the tray icon has to be told even while the window is away,
@@ -842,6 +897,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// <summary>Windows broadcasts this when a setting changes, the theme among them.</summary>
     private const int WM_SETTINGCHANGE = 0x001A;
     private const int WM_ENTERSIZEMOVE = 0x0231;
+    private const int WM_SYSCOMMAND = 0x0112;
+    private const int SC_MINIMIZE = 0xF020;
+    private const int SC_RESTORE = 0xF120;
 
     /// <summary>
     /// Puts the colourway that suits the current theme on the title bar, the taskbar button
@@ -866,6 +924,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Down to the taskbar button. Only offered while the app lives there: the shell will do
+    /// it because the window keeps its minimize box (ResizeMode CanMinimize), and the
+    /// StateChanged handler keeps its corner and refreshes the list on the way back.
+    /// </summary>
+    private void Minimize_Click(object sender, RoutedEventArgs e) => MinimizeToTaskbar();
 
     private void ChooseTaskbar_Click(object sender, RoutedEventArgs e) => AnswerTaskbarQuestion(true);
 
@@ -907,7 +972,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Asked with the window put away, the tray icon just went and a hidden window has no
         // taskbar button: without this, the app would be nowhere at all. Options shows the
         // window before it opens, so this is a guard rather than a path taken today.
-        if (wanted && !IsVisible) ShowFromTray();
+        if (wanted && !IsVisible) ShowFromTray(fly: false);
 
         TitleBar.Match(this);
         TitleBar.Round(this);
@@ -1268,18 +1333,193 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     /// </summary>
     private void DismissWindow()
     {
-        if (ShowInTaskbar) WindowState = WindowState.Minimized;
+        if (ShowInTaskbar) MinimizeToTaskbar();
         else HideToTray();
     }
 
-    private void HideToTray()
+    // ---- Flights ------------------------------------------------------------
+    // The window flies to its taskbar button or its tray icon on the way out and back from
+    // it on the way in: see WindowFlight. Each path falls back to what it did before
+    // whenever there is no target or no picture, so the worst case is Windows' own.
+
+    /// <summary>A flight is under way; another request waits for it rather than crossing it.</summary>
+    private bool _flying;
+
+    /// <summary>The window as it was put away, for the flight back.</summary>
+    private WindowFlight.Snapshot? _awayShot;
+
+    private IntPtr Hwnd => new WindowInteropHelper(this).Handle;
+
+    private void DropAwayShot() => _awayShot = null;
+
+    /// <summary>Down to the taskbar button.</summary>
+    private async void MinimizeToTaskbar()
     {
-        SavePlacement();
-        Hide();
+        if (_flying || WindowState == WindowState.Minimized) return;
+        var hwnd = Hwnd;
+        if (!WindowFlight.Wanted)
+        {
+            WindowState = WindowState.Minimized;
+            return;
+        }
+
+        _flying = true;
+        try
+        {
+            // Where the button was seen as the window came forward, so the window moves the
+            // moment it is asked to rather than sitting still for a lookup. Only the very
+            // first time, with nothing seen yet, is it worth a short wait.
+            var target = TaskbarButton.Remembered(hwnd)
+                ?? await TaskbarButton.FindAsync(hwnd, AppName, TimeSpan.FromMilliseconds(150));
+            var shot = target is null ? null : WindowFlight.Capture(hwnd);
+            if (target is null || shot is null)
+            {
+                WindowFlight.SetSystemTransitions(hwnd, true);
+                WindowState = WindowState.Minimized;
+                return;
+            }
+
+            WindowFlight.SetSystemTransitions(hwnd, false);
+            var flight = WindowFlight.Fly(shot, target.Value, away: true);
+            await flight.Shown;
+            // Cloaked rather than minimised at once: minimising is work for Windows, and done
+            // here it cost the first frames their place. Out of sight, the window is put down
+            // once the picture has arrived.
+            WindowFlight.Cloak(hwnd, true);
+            try
+            {
+                await flight.Arrived;
+                WindowState = WindowState.Minimized;
+            }
+            finally
+            {
+                WindowFlight.Cloak(hwnd, false);
+                flight.Release();
+            }
+            _awayShot = shot;
+            // Fresh for the flight back, which takes whatever is to hand rather than waiting.
+            TaskbarButton.Refresh(hwnd, AppName);
+        }
+        finally { _flying = false; }
     }
 
-    private void ShowFromTray()
+    /// <summary>Back up from the taskbar button, where the window was.</summary>
+    private async Task RestoreFromTaskbarAsync()
     {
+        if (_flying) return;
+        var hwnd = Hwnd;
+        // Where it was last seen, at once: a restore that waits for a lookup feels slow.
+        var target = TaskbarButton.Remembered(hwnd);
+        var shot = _awayShot;
+        if (!WindowFlight.Wanted || target is null || shot is null)
+        {
+            WindowFlight.SetSystemTransitions(hwnd, true);
+            WindowState = WindowState.Normal;
+            return;
+        }
+
+        _flying = true;
+        try
+        {
+            await FlyBackAsync(hwnd, shot, target.Value, () => WindowState = WindowState.Normal);
+        }
+        finally
+        {
+            _flying = false;
+            WindowFlight.SetSystemTransitions(hwnd, true);
+            TaskbarButton.Refresh(hwnd, AppName);
+        }
+    }
+
+    /// <summary>
+    /// Plays a flight back in, with the window shown underneath it but cloaked, so it is laid
+    /// out and painted by the time the picture lands and is uncovered at that moment.
+    /// </summary>
+    private async Task FlyBackAsync(IntPtr hwnd, WindowFlight.Snapshot shot, ScreenRect target, Action show)
+    {
+        WindowFlight.SetSystemTransitions(hwnd, false);
+        WindowFlight.Cloak(hwnd, true);
+        var flight = WindowFlight.Fly(shot, target, away: false);
+        try
+        {
+            await flight.Shown;
+            show();
+            Activate();
+            await flight.Arrived;
+        }
+        finally
+        {
+            WindowFlight.Cloak(hwnd, false);
+            flight.Release();
+        }
+    }
+
+    private async void HideToTray()
+    {
+        if (_flying) return;
+        SavePlacement();
+        var hwnd = Hwnd;
+        ScreenRect icon = default;
+        var shot = WindowFlight.Wanted && _tray is not null && _tray.TryGetBounds(out icon)
+            ? WindowFlight.Capture(hwnd)
+            : null;
+        if (shot is null)
+        {
+            Hide();
+            return;
+        }
+
+        _flying = true;
+        try
+        {
+            WindowFlight.SetSystemTransitions(hwnd, false);
+            var flight = WindowFlight.Fly(shot, icon, away: true);
+            await flight.Shown;
+            // As for minimising: out of sight at once, put away once the picture is there.
+            WindowFlight.Cloak(hwnd, true);
+            try
+            {
+                await flight.Arrived;
+                Hide();
+            }
+            finally
+            {
+                WindowFlight.Cloak(hwnd, false);
+                flight.Release();
+            }
+            _awayShot = shot;
+        }
+        finally { _flying = false; }
+    }
+
+    /// <param name="fly">
+    /// Off where something needs the window up before the next line runs: Options opens over
+    /// it, and a window still on its way in would not yet be there to own the dialog.
+    /// </param>
+    private async void ShowFromTray(bool fly = true)
+    {
+        if (_flying) return;
+        var hwnd = Hwnd;
+        if (fly && WindowState == WindowState.Minimized && IsVisible)
+        {
+            await RestoreFromTaskbarAsync();
+        }
+        else if (fly && !IsVisible && WindowFlight.Wanted && _awayShot is { } shot
+                 && _tray is not null && _tray.TryGetBounds(out var icon))
+        {
+            _flying = true;
+            try { await FlyBackAsync(hwnd, shot, icon, Show); }
+            finally
+            {
+                _flying = false;
+                WindowFlight.SetSystemTransitions(hwnd, true);
+            }
+        }
+        else
+        {
+            WindowFlight.SetSystemTransitions(hwnd, true);
+        }
+
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
@@ -1751,11 +1991,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         fold.ClipToBounds = true;
         // The window's own easing and time, so the two edges move together. The margin goes
         // with it, or the gap above the fold would stay open to the end and then snap shut.
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var shut = new DoubleAnimation(height, 0, ResizeDuration) { EasingFunction = ease };
+        var shut = new DoubleAnimation(height, 0, ResizeDuration) { EasingFunction = SlideEase };
         var gap = new ThicknessAnimation(fold.Margin, new Thickness(fold.Margin.Left, 0, fold.Margin.Right, 0), ResizeDuration)
         {
-            EasingFunction = ease,
+            EasingFunction = SlideEase,
         };
         shut.Completed += (_, _) =>
         {
@@ -1802,7 +2041,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompositionTarget.Rendering += ResizeFrame;
     }
 
+    /// <summary>The frame the slide last stepped in, so it steps once a frame.</summary>
+    private TimeSpan _lastSlideFrame;
+    private bool _inSlideFrame;
+
     private void ResizeFrame(object? sender, EventArgs e)
+    {
+        // Once a frame, and never from inside itself. WPF raises Rendering again for the
+        // same frame, and from within SetWindowPos — which lays the window out and renders
+        // it — so each step set off the next before the first was painted: measured, some
+        // 25 deep and a ninth of a second long, while the window's edge moved across a
+        // picture that had stopped being drawn.
+        if (_inSlideFrame) return;
+        if (e is RenderingEventArgs rendering)
+        {
+            if (rendering.RenderingTime == _lastSlideFrame) return;
+            _lastSlideFrame = rendering.RenderingTime;
+        }
+        _inSlideFrame = true;
+        try { StepSlide(); }
+        finally { _inSlideFrame = false; }
+    }
+
+    /// <summary>
+    /// Ease out: quick to start, settling gently into place. A sine rather than a cube, which
+    /// set off at three times its average speed and covered a quarter of the way in the first
+    /// frame or two. Shared with the folds, whose edge moves with the window's.
+    /// </summary>
+    private static readonly SineEase SlideEase = Frozen(new SineEase { EasingMode = EasingMode.EaseOut });
+
+    private static T Frozen<T>(T freezable) where T : Freezable
+    {
+        freezable.Freeze();
+        return freezable;
+    }
+
+    private void StepSlide()
     {
         // Minimised partway, by Esc in the taskbar: the rest of the slide would drag the
         // minimised window back out of wherever the shell parked it.
@@ -1813,8 +2087,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var t = Math.Min(1, _resizeClock.Elapsed.TotalMilliseconds / ResizeDuration.TotalMilliseconds);
-        // Ease out: quick to start, settling gently into place.
-        var k = 1 - Math.Pow(1 - t, 3);
+        var k = SlideEase.Ease(t);
         _resizeNow = new Rect(
             _resizeFrom.X + (_resizeTo.X - _resizeFrom.X) * k,
             _resizeFrom.Y + (_resizeTo.Y - _resizeFrom.Y) * k,
@@ -1822,7 +2095,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _resizeFrom.Height + (_resizeTo.Height - _resizeFrom.Height) * k);
         // Where the window stays put, as it does once the user has placed it, only its size
         // is set. Then a drag that starts partway is not pulled back to where it started.
+        var setStart = Stopwatch.GetTimestamp();
         SetBounds(_resizeNow, move: _resizeFrom.TopLeft != _resizeTo.TopLeft);
+        if (SlideLog is not null)
+            _slideFrames.Add((_resizeClock.Elapsed.TotalMilliseconds, Stopwatch.GetElapsedTime(setStart).TotalMilliseconds));
 
         if (t >= 1) JumpTo(_resizeTo);
     }
@@ -1848,7 +2124,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompositionTarget.Rendering -= ResizeFrame;
         _resizing = false;
         HoldScrollBar(false);
+        if (SlideLog is { } log && _slideFrames.Count > 0)
+        {
+            try
+            {
+                System.IO.File.AppendAllText(log,
+                    $"slide at:  {string.Join(" ", _slideFrames.Select(f => f.At.ToString("0")))}\n"
+                    + $"slide set: {string.Join(" ", _slideFrames.Select(f => f.Set.ToString("0.0")))}\n");
+            }
+            catch (System.IO.IOException) { }
+            _slideFrames.Clear();
+        }
     }
+
+    /// <summary>Frame timings of each slide, written out when WORKTREEHELPER_FLIGHTLOG names a file.</summary>
+    private static readonly string? SlideLog = Environment.GetEnvironmentVariable("WORKTREEHELPER_FLIGHTLOG") is { Length: > 0 } path ? path : null;
+    private readonly List<(double At, double Set)> _slideFrames = [];
 
     /// <summary>
     /// Keeps the list's scroll bar out of the way while the window slides: for a frame here

@@ -118,6 +118,23 @@ internal sealed class TrayIcon : IDisposable
         return IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Where the icon is on screen, in physical pixels, for the window to fly into. False
+    /// when the shell will not say, as when the icon is tucked away in the overflow.
+    /// </summary>
+    public bool TryGetBounds(out ScreenRect bounds)
+    {
+        bounds = default;
+        if (_disposed) return false;
+        var id = new NOTIFYICONIDENTIFIER
+        {
+            cbSize = Marshal.SizeOf<NOTIFYICONIDENTIFIER>(),
+            hWnd = _source.Handle,
+            uID = TrayIconId,
+        };
+        return Shell_NotifyIconGetRect(ref id, out bounds) == 0 && !bounds.IsEmpty;
+    }
+
     /// <summary>The size the notification area wants its icons at.</summary>
     public static (int Width, int Height) IconSize
         => (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
@@ -167,6 +184,18 @@ internal sealed class TrayIcon : IDisposable
         public Guid guidItem;
         public IntPtr hBalloonIcon;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NOTIFYICONIDENTIFIER
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public Guid guidItem;
+    }
+
+    [DllImport("shell32.dll")]
+    private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out ScreenRect rect);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "Shell_NotifyIconW")]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -50,7 +50,8 @@ and it can be changed at any time.
 | Where to find it | Icon in the notification area | A taskbar button, and Alt+Tab |
 | Clicking it | Shows and hides the window | Minimises and restores the window |
 | Its menu | Right-click the icon: the worktrees, so one can be opened without the window appearing at all | Click the icon in the title bar, or right-click the title bar |
-| Closing the window | Puts it away; **Exit** on the menu quits | Quits the app. `Esc` minimises instead |
+| Minimising | No need: closing puts it away | The minimise button beside Close, or `Esc` |
+| Closing the window | Puts it away; **Exit** on the menu quits | Quits the app |
 
 To change your mind, open **Options** (the gear in the title bar, or on that menu). It applies
 straight away.

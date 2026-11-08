@@ -16,7 +16,7 @@
 
     <!-- The top strip belongs to the app, so the folder, refresh and pin controls can live
          in it rather than costing a row of their own. The caption buttons come with us:
-         UseAeroCaptionButtons off means the close button below is ours to draw.
+         UseAeroCaptionButtons off means the minimize and close buttons below are ours to draw.
 
          The window background is set explicitly because of this. The Fluent theme leaves it
          transparent for a Mica backdrop, and a window with no DWM frame and no background of
@@ -25,7 +25,8 @@
          CanMinimize rather than NoResize, which is all the sizing the user gets either way:
          NoResize leaves the window without WS_MINIMIZEBOX, and the shell will not minimize a
          window that says it cannot be minimized - so clicking its taskbar button only ever
-         raised it. The minimize box is never drawn: the caption is the app's own. -->
+         raised it. The system's minimize box is never drawn: the caption is the app's own,
+         and draws its own minimize button while the app lives in the taskbar. -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="28" ResizeBorderThickness="0" GlassFrameThickness="0"
                       UseAeroCaptionButtons="False" CornerRadius="0"/>
@@ -209,12 +210,39 @@
             <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
             <Setter Property="FontSize" Value="10"/>
         </Style>
+        <!-- The window's own minimize button, beside Close the way every other window has
+             one. The same full-height block, with the quiet hover of a caption button rather
+             than Close's red. -->
+        <Style x:Key="MinimizeButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fill" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <!-- The window's own close button, since the system one went with the caption.
              Full caption height and red on hover, the way every other window behaves. -->
         <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
             <Setter Property="Width" Value="42"/>
             <Setter Property="Height" Value="28"/>
-            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Margin" Value="0"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Arrow"/>
             <Setter Property="Template">
@@ -480,14 +508,23 @@
                 <Button Style="{StaticResource RowButton}" Click="Refresh_Click"
                         Content="&#xE72C;" IsEnabled="{Binding HasRepo}" ToolTip="Refresh"
                         AutomationProperties.Name="Refresh"/>
-                <Button Style="{StaticResource RowButton}" Click="Options_Click"
+                <Button x:Name="OptionsButton" Style="{StaticResource RowButton}" Click="Options_Click"
                         Content="&#xE713;" ToolTip="Options"
                         AutomationProperties.Name="Options"/>
                 <ToggleButton Style="{StaticResource PinButton}" IsChecked="{Binding IsPinned}"
                               Content="&#xE718;" AutomationProperties.Name="Keep window on top"/>
-                <Button Style="{StaticResource CloseButton}" Click="Close_Click"
-                        Content="&#xE8BB;" ToolTip="{Binding CloseHint}"
-                        AutomationProperties.Name="Close"/>
+                <!-- The window controls, set a little apart from the app's own. Minimize only
+                     in the taskbar: in the tray there is no taskbar button to minimise to, and
+                     Close already puts the window away. -->
+                <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                    <Button Style="{StaticResource MinimizeButton}" Click="Minimize_Click"
+                            Content="&#xE921;" ToolTip="Minimise (Esc)"
+                            AutomationProperties.Name="Minimize"
+                            Visibility="{Binding LivesInTaskbar, Converter={x:Static local:BoolToVisibilityConverter.Instance}}"/>
+                    <Button Style="{StaticResource CloseButton}" Click="Close_Click"
+                            Content="&#xE8BB;" ToolTip="{Binding CloseHint}"
+                            AutomationProperties.Name="Close"/>
+                </StackPanel>
             </StackPanel>
         </Grid>
 
