@@ -3,10 +3,8 @@
 ## v1.11.4
 
 - On the taskbar, the title bar has a **minimise** button beside Close.
-- Minimised, the window **flies into its taskbar button**; closed to the tray, into the tray icon.
-  It comes back out the same way.
-- **Options opens out of the gear** and closes back into it.
-- The window **no longer jumps** as it grows or shrinks: the list is drawn the whole way.
+- **Smoother animations**: the window flies into its taskbar button or tray icon and back,
+  Options opens out of the gear, and the window no longer jumps as it grows or shrinks.
 
 ## v1.10.0
 
