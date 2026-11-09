@@ -25,6 +25,7 @@ internal static class Commands
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        FreshEnvironment.ApplyTo(psi);
         if (environment is { } variable) psi.Environment[variable.Name] = variable.Value;
 
         Process proc;

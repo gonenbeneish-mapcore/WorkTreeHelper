@@ -232,6 +232,8 @@ public static class GitService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        // The variables as Windows has them now, and git found on the PATH among them.
+        FreshEnvironment.ApplyTo(psi);
         // Make git print paths without quoting/escaping non-ASCII characters.
         psi.Environment["LC_ALL"] = "C.UTF-8";
         // Only look, never write. git status takes index.lock to save the index it refreshes on

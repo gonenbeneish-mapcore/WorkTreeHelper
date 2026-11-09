@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
@@ -87,12 +88,14 @@ public static class Launcher
 
         try
         {
-            using var proc = Process.Start(new ProcessStartInfo(vswhere, "-latest -property installationPath")
+            var psi = new ProcessStartInfo(vswhere, "-latest -property installationPath")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-            });
+            };
+            FreshEnvironment.ApplyTo(psi);
+            using var proc = Process.Start(psi);
             if (proc is null) return null;
 
             var root = proc.StandardOutput.ReadLine()?.Trim();
@@ -147,7 +150,7 @@ public static class Launcher
             catch { /* malformed InstallDir */ }
         }
 
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var dir in (FreshEnvironment.Get("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {
@@ -263,6 +266,11 @@ public static class Launcher
     }
 
     /// <summary>Hands a URL to whatever the user browses with.</summary>
+    /// <remarks>
+    /// Through the shell, the one start that has to be: only it knows which browser that is.
+    /// A browser started this way gets the app's own variables, but one is nearly always
+    /// running already, and takes the page into the copy that is.
+    /// </remarks>
     public static void OpenInBrowser(string url)
         => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
@@ -282,7 +290,7 @@ public static class Launcher
             if (File.Exists(c)) return c;
 
         // Search PATH for Code.exe (e.g. custom install location)
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var dir in (FreshEnvironment.Get("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {
@@ -297,6 +305,12 @@ public static class Launcher
         return null;
     }
 
+    /// <summary>Starts a program with the environment variables as Windows has them now.</summary>
+    /// <remarks>
+    /// Directly rather than through the shell, which would hand over this app's own variables:
+    /// see <see cref="FreshEnvironment"/>. A console program, the terminal or a script, still
+    /// opens a console window of its own, as this app has none to share.
+    /// </remarks>
     private static void Start(string file, string args, string workingDir, bool hidden = false)
     {
         var psi = new ProcessStartInfo
@@ -304,11 +318,23 @@ public static class Launcher
             FileName = file,
             Arguments = args,
             WorkingDirectory = workingDir,
-            UseShellExecute = !hidden,
+            UseShellExecute = false,
             CreateNoWindow = hidden,
         };
-        Process.Start(psi);
+        FreshEnvironment.ApplyTo(psi);
+        try
+        {
+            using var _ = Process.Start(psi);
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ERROR_ELEVATION_REQUIRED)
+        {
+            // Set to always run as administrator, Visual Studio often is. Only the shell can
+            // ask for that consent, and it hands over this app's own variables, not fresh ones.
+            using var _ = Process.Start(new ProcessStartInfo(file, args) { WorkingDirectory = workingDir, UseShellExecute = true });
+        }
     }
+
+    private const int ERROR_ELEVATION_REQUIRED = 740;
 
     private static string Quote(string s) => $"\"{s}\"";
 }

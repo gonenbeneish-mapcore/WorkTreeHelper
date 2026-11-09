@@ -1282,6 +1282,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             try
             {
+                // The one start that keeps this copy's own variables rather than fresh ones:
+                // it is this app again, and the WORKTREEHELPER_ switches a test copy runs
+                // with have to outlast an update. What it starts gets fresh ones regardless.
                 Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
             }
             catch

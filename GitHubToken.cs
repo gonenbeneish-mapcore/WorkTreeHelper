@@ -24,7 +24,7 @@ internal static class GitHubToken
     public static async Task<string?> FindAsync(string workingDirectory, CancellationToken ct)
     {
         foreach (var name in new[] { "GH_TOKEN", "GITHUB_TOKEN" })
-            if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } fromEnvironment)
+            if (FreshEnvironment.Get(name) is { } fromEnvironment)
                 return fromEnvironment;
 
         // Only if it is installed; this is not a dependency, just a place to look.
