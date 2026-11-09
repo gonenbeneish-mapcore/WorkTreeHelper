@@ -289,3 +289,24 @@ public class NothingBeyondTests
         }
     }
 }
+
+public class DidNotStartTests
+{
+    [Fact]
+    public void A_git_Windows_could_not_start_is_tried_once_more()
+    {
+        Assert.Equal(unchecked((int)0xC0000142), GitService.DidNotStart);
+        Assert.True(GitService.ShouldRetry(GitService.DidNotStart, attempt: 0));
+    }
+
+    [Fact]
+    public void Only_once()
+        => Assert.False(GitService.ShouldRetry(GitService.DidNotStart, attempt: 1));
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(128)]
+    public void A_git_that_ran_and_failed_is_not_tried_again(int exitCode)
+        => Assert.False(GitService.ShouldRetry(exitCode, attempt: 0));
+}

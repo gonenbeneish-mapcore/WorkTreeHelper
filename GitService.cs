@@ -186,7 +186,34 @@ public static class GitService
         return links?.Prefer(p) ?? p;
     }
 
+    /// <summary>
+    /// The exit code of a program Windows could not start: its DLLs failed to initialise
+    /// (STATUS_DLL_INIT_FAILED, 0xc0000142). Nothing to do with git or the repository - Windows
+    /// short of room to set a console program up, with many processes running - and it passes.
+    /// </summary>
+    internal const int DidNotStart = unchecked((int)0xC0000142);
+
+    /// <summary>Whether an exit code is worth one more try: the program never ran at all.</summary>
+    internal static bool ShouldRetry(int exitCode, int attempt) => exitCode == DidNotStart && attempt == 0;
+
     private static async Task<string> RunGitAsync(string workingDir, string args, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var (exitCode, stdout, stderr) = await RunGitOnceAsync(workingDir, args, ct).ConfigureAwait(false);
+            if (ShouldRetry(exitCode, attempt))
+            {
+                // A moment for whatever ran Windows short to pass.
+                await Task.Delay(150, ct).ConfigureAwait(false);
+                continue;
+            }
+            if (exitCode != 0)
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? $"git exited with code {exitCode}" : stderr.Trim());
+            return stdout;
+        }
+    }
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunGitOnceAsync(string workingDir, string args, CancellationToken ct)
     {
         // Process.Start fails the same way for a missing folder as for a missing git, and
         // that would send someone off to reinstall git over a folder that was deleted.
@@ -233,10 +260,7 @@ public static class GitService
             await proc.WaitForExitAsync(ct).ConfigureAwait(false);
             var stdout = await stdoutTask.ConfigureAwait(false);
             var stderr = await stderrTask.ConfigureAwait(false);
-
-            if (proc.ExitCode != 0)
-                throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? $"git exited with code {proc.ExitCode}" : stderr.Trim());
-            return stdout;
+            return (proc.ExitCode, stdout, stderr);
         }
     }
 }
