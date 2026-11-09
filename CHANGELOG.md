@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.11.5
+
+- Fixed: when git fails to start during a refresh, Windows no longer puts up an error box; the app
+  tries once more.
+
 ## v1.11.4
 
 - On the taskbar, the title bar has a **minimise** button beside Close.
