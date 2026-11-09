@@ -2,10 +2,7 @@
 
 ## v1.11.6
 
-- Programs opened from the app - VS Code, Visual Studio, the terminal, Git Extensions, Android
-  Studio - and the git and gh it runs itself now see **environment variables as Windows has them
-  now**, the same as if started from the Start menu. A variable changed after the app started no
-  longer needs the app restarted to reach them.
+- Programs opened from the app see **environment variables changed** since it started.
 
 ## v1.11.5
 
