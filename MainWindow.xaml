@@ -390,6 +390,12 @@
         <!-- Shown while neither mode is open, where there is still a choice to make. -->
         <Style x:Key="VsChooserButton" TargetType="Button" BasedOn="{StaticResource VsButton}">
             <Setter Property="ToolTip" Value="Open this worktree in Visual Studio — the generated solution, or the folder"/>
+            <Style.Triggers>
+                <!-- No menu then: the button generates the solution and opens it. -->
+                <DataTrigger Binding="{Binding AllowSecondVisualStudio}" Value="False">
+                    <Setter Property="ToolTip" Value="Generate the solution and open it in Visual Studio (right-click the row to open the folder instead)"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
         <!-- The solution mode, once either mode is open. -->
         <Style x:Key="VsSolutionButton" TargetType="Button" BasedOn="{StaticResource VsButton}">

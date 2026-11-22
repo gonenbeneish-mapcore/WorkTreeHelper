@@ -2477,10 +2477,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    /// <summary>The button shown while nothing has the worktree open: it asks which way in.</summary>
+    /// <summary>
+    /// The button shown while nothing has the worktree open: it asks which way in — unless a
+    /// second Visual Studio is not allowed, where it goes straight to the generated solution.
+    /// </summary>
+    /// <remarks>
+    /// With one instance allowed, whatever opens first is the one the worktree keeps, and the
+    /// solution is the usual one. The folder is still a right-click away, on the row's menu.
+    /// </remarks>
     private void OpenVisualStudio_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string folder } button) AskHowToOpenVisualStudio(folder, button);
+        if (sender is not Button { Tag: string folder } button) return;
+        if (_settings.AllowSecondVisualStudio) AskHowToOpenVisualStudio(folder, button);
+        else _ = ReachVisualStudioAsync(folder, VisualStudioMode.Solution);
     }
 
     /// <summary>The solution button, shown once either mode is open.</summary>
