@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.11.7
+
+- With a second Visual Studio not allowed, the **Visual Studio button** generates the solution and
+  opens it without asking; the row's right-click menu still offers the folder.
+
 ## v1.11.6
 
 - Programs opened from the app see **environment variables changed** since it started.
